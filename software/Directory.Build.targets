@@ -7,7 +7,7 @@
       <Output TaskParameter="ConsoleOutput" PropertyName="MultiNodeDAQDirty" />
     </Exec>
     <PropertyGroup>
-      <Version>0.3.0-stage3</Version>
+      <Version>0.4.0-stage4</Version>
       <InformationalVersion>$(Version)+$(MultiNodeDAQCommit)</InformationalVersion>
       <InformationalVersion Condition="'$(MultiNodeDAQDirty)' != ''">$(InformationalVersion).dirty</InformationalVersion>
       <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

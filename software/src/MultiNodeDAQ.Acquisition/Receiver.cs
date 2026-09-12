@@ -22,6 +22,7 @@ public sealed class SessionStats
     public int Reconnects,ParserCapacity;
     public long LastDataTicks,FirstDataTicks,DrainedTicks;
     public uint BufferRows;
+    public uint InitialRate,InitialConfig,InitialEncoding;
     internal ulong LastSequence,HostSequence,Request;
     internal long TimingBytes;
     internal readonly Dictionary<uint,(uint Rate,ushort Encoding)> Configs=[];
@@ -33,7 +34,8 @@ public sealed class SessionStats
 public sealed class Receiver : IAsyncDisposable
 {
     private readonly ReceiverOptions options;
-    private readonly RecordingSession? recording;
+    private readonly RecordingControl recording;
+    private readonly Dictionary<string,PreviewBuffer> previews=[];
     private readonly TcpListener listener;
     private readonly CancellationTokenSource stop=new();
     private readonly object gate=new();
@@ -54,7 +56,7 @@ public sealed class Receiver : IAsyncDisposable
     public Receiver(ReceiverOptions options, RecordingSession? recording=null)
     {
         Wire.Check(options.MaxConnections is >=1 and <=128 && options.MaxSessions>=options.MaxConnections && options.MaxSessions<=4096,"receiver limits");
-        this.options=options;this.recording=recording;listener=new(IPAddress.Parse(options.Address),options.Port);slots=new(options.MaxConnections);
+        this.options=options;this.recording=new RecordingControl(recording);listener=new(IPAddress.Parse(options.Address),options.Port);slots=new(options.MaxConnections);
     }
     public LiveHub Live { get; } = new();
     public int Port=>((IPEndPoint)listener.LocalEndpoint).Port;
@@ -97,12 +99,13 @@ public sealed class Receiver : IAsyncDisposable
                     stats=new(){Unit=unit,Session=sid,Synthetic=Metadata.Bool(h,"synthetic"),Mode=h.TryGetProperty("mode",out var mode)?mode.GetString()??"unknown":"unknown",Seed=h.TryGetProperty("seed",out _)?Metadata.Number(h,"seed"):0};sessions.Add(key,stats);
                 }
                 else {Wire.Check(hello.Sequence>stats.LastSequence,"reconnect sequence");Wire.Check(stats.Synthetic==Metadata.Bool(h,"synthetic") && stats.Mode==(h.TryGetProperty("mode",out _)?Metadata.Text(h,"mode"):"unknown") && stats.Seed==(h.TryGetProperty("seed",out _)?Metadata.Number(h,"seed"):0),"session metadata changed");stats.Reconnects++;}
+                stats.InitialRate=hello.Rate;stats.InitialConfig=hello.Config;stats.InitialEncoding=h.TryGetProperty("preferred_encoding",out _)?Metadata.Number(h,"preferred_encoding"):1;
                 stats.Label=h.TryGetProperty("label",out var label)?label.GetString()??unit:unit;
                 stats.State=h.TryGetProperty("state",out _)?Metadata.State(h):"idle";stats.Connected=true;stats.LastSequence=hello.Sequence;
                 // A continuing session reuses acknowledged configs; new sampling sessions cannot silently invent one.
                 connection=new(client,stats);active.Add(unit,connection);connections++;
             }
-            recording?.Accept(hello);Live.Publish(hello);
+            recording.Accept(hello);Live.Publish(hello);
             bool supportsCommit=Metadata.Field(h,"capabilities").EnumerateArray().Any(x=>x.GetString()=="commit_through");ulong lastCommitSent=0;
             await SendFrame(connection,Metadata.Json(5,hello.Unit,hello.Session,0,0,new{request_id="0",ok=true,state=connection.Stats.State,effective_sample=connection.Stats.NextSample.ToString(),error=(string?)null,details=new{}}));
             if(options.AutoStart && connection.Stats.State=="idle")
@@ -160,8 +163,8 @@ public sealed class Receiver : IAsyncDisposable
                     else if(f.Kind==7){Diagnostic(unit+" reported GAP "+o.GetRawText());}
                     else throw new ContractException("unexpected node message");
                 }
-                recording?.Accept(f);Live.Publish(f);
-                if(recording is not null && supportsCommit && !recording.Failed)
+                recording.Accept(f);Live.Publish(f);
+                if(recording.Active && supportsCommit && !recording.Failed)
                 {
                     ulong durable=recording.Committed(unit,sid);
                     if(durable>lastCommitSent){await Issue(connection,"commit_through",new{next_sample=durable.ToString()},null);lastCommitSent=durable;}
@@ -175,13 +178,16 @@ public sealed class Receiver : IAsyncDisposable
             if(connection is not null)lock(gate)
             {
                 active.Remove(connection.Stats.Unit);connection.Stats.Connected=false;
-                recording?.Event(connection.Stats.Unit,connection.Stats.Session,"node_disconnected",new{drained=connection.Stats.DrainedTicks>0,observed_next=connection.Stats.NextSample.ToString()});
+                recording.Event(connection.Stats.Unit,connection.Stats.Session,"node_disconnected",new{drained=connection.Stats.DrainedTicks>0,observed_next=connection.Stats.NextSample.ToString()});
                 foreach(var pending in connection.Pending.Values)pending.Completion?.TrySetException(new IOException("node disconnected"));connection.Pending.Clear();
             }
         }
     }
+    public RecordingControl Recording=>recording;
+    public object Preview(string unit,string session,double seconds){lock(gate)return previews.TryGetValue(unit.ToUpperInvariant()+":"+session.ToUpperInvariant(),out var p)?p.Snapshot(seconds):new{available=false};}
     private void Data(SessionStats s,Frame f)
     {
+        lock(gate){string key=s.Unit+":"+s.Session;if(!previews.TryGetValue(key,out var p))previews[key]=p=new PreviewBuffer();p.Add(Wire.Normalize(f));}
         byte[] digest=SHA256.HashData(Wire.Encode(Wire.Normalize(f) with{Sequence=0}));ulong end=f.FirstSample+f.Count;
         ulong bad=0;
         if(options.VerifyCounter && s.Synthetic && s.Mode=="counter")
@@ -203,7 +209,7 @@ public sealed class Receiver : IAsyncDisposable
             if(f.FirstSample<s.NextSample)
             {
                 int hole=s.Holes.FindIndex(x=>x.Start<=f.FirstSample && x.End>=end);
-                if(hole<0 && recording is not null)return; // The recorder checks historical fingerprints on disk.
+                if(hole<0 && recording.Active)return; // The recorder checks historical fingerprints on disk.
                 Wire.Check(hole>=0,"unverifiable old or overlapping range");var range=s.Holes[hole];s.Holes.RemoveAt(hole);
                 if(range.Start<f.FirstSample)s.Holes.Add((range.Start,f.FirstSample));if(end<range.End)s.Holes.Add((end,range.End));
                 s.Recovered+=f.Count;s.Missing-=f.Count;
@@ -221,7 +227,7 @@ public sealed class Receiver : IAsyncDisposable
     private async Task SendFrame(Connection c,Frame f)
     {
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);timeout.CancelAfter(TimeSpan.FromSeconds(5));
-        await c.Write.WaitAsync(timeout.Token);try{var sent=f with{Sequence=NextHost(c)};recording?.Accept(sent);await c.Client.GetStream().WriteAsync(Wire.Encode(sent),timeout.Token);}finally{c.Write.Release();}
+        await c.Write.WaitAsync(timeout.Token);try{var sent=f with{Sequence=NextHost(c)};recording.Accept(sent);await c.Client.GetStream().WriteAsync(Wire.Encode(sent),timeout.Token);}finally{c.Write.Release();}
     }
     private async Task<ulong> Issue(Connection c,string op,object args,TaskCompletionSource<JsonElement>? completion)
     {
@@ -240,11 +246,12 @@ public sealed class Receiver : IAsyncDisposable
     {
         lock(gate)return new
         {
-            timestamp=DateTimeOffset.UtcNow,connections,rejected,errors,active=active.Count,
+            timestamp=DateTimeOffset.UtcNow,auto_start=options.AutoStart,connections,rejected,errors,active=active.Count,
             limits=new{max_connections=options.MaxConnections,max_sessions=options.MaxSessions,max_frame_bytes=Wire.MaxFrame,recent_hashes_per_session=1024,max_gap_intervals=1024},
             diagnostics=diagnostics.ToArray(),units=sessions.Values.Select(s=>new
             {
-                unit=s.Unit,session=s.Session,label=s.Label,state=s.State,connected=s.Connected,mode=s.Mode,
+                unit=s.Unit,session=s.Session,label=s.Label,state=s.State,connected=s.Connected,mode=s.Mode,synthetic=s.Synthetic,
+                config=s.Configs.Count>0?new{id=s.Configs.Last().Key,sample_rate_hz=s.Configs.Last().Value.Rate,encoding=(uint)s.Configs.Last().Value.Encoding,synthetic=s.Synthetic}:new{id=s.InitialConfig,sample_rate_hz=s.InitialRate,encoding=s.InitialEncoding,synthetic=s.Synthetic},
                 frames=s.Frames,rows=s.Rows,payload_bytes=s.Bytes,next_sample=s.NextSample,missing_rows=s.Missing,recovered_rows=s.Recovered,
                 duplicate_frames=s.Duplicates,conflicts=s.Conflicts,sample_errors=s.SampleErrors,reported_drops=s.ReportedDrops,sequence_gaps=s.SequenceGaps,reconnects=s.Reconnects,
                 average_payload_bytes_per_second=s.FirstDataTicks==0?0:s.Bytes/Math.Max(0.001,Stopwatch.GetElapsedTime(s.FirstDataTicks).TotalSeconds),

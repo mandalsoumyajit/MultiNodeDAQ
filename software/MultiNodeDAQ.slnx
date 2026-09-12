@@ -9,4 +9,5 @@
   <Project Path="tests/MultiNodeDAQ.Contracts.Tests/MultiNodeDAQ.Contracts.Tests.csproj" />
   <Project Path="tests/MultiNodeDAQ.Integration.Tests/MultiNodeDAQ.Integration.Tests.csproj" />
   <Project Path="tests/MultiNodeDAQ.Recording.Tests/MultiNodeDAQ.Recording.Tests.csproj" />
+  <Project Path="tests/MultiNodeDAQ.Desktop.Tests/MultiNodeDAQ.Desktop.Tests.csproj" />
 </Solution>

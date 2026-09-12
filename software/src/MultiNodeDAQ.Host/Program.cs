@@ -33,8 +33,8 @@ await using var recording=argsMap.Has("record")?new RecordingSession(new(argsMap
 var receiver=new Receiver(new(argsMap.Get("address","127.0.0.1"),argsMap.Int("port",45100),AutoStart:!argsMap.Has("no-auto-start")),recording);
 receiver.Start();
 string? ipcToken=Environment.GetEnvironmentVariable("MULTINODEDAQ_IPC_TOKEN");
-await using var api=argsMap.Has("ipc-port")?new LocalApi(receiver,ipcToken??throw new ArgumentException("Set MULTINODEDAQ_IPC_TOKEN to a random token of at least 32 characters"),argsMap.Int("ipc-port",45101),()=>recording?.Snapshot()):null;
-api?.Start();
+await using var api=argsMap.Has("ipc-port")?new LocalApi(receiver,ipcToken??throw new ArgumentException("Set MULTINODEDAQ_IPC_TOKEN to a random token of at least 32 characters"),argsMap.Int("ipc-port",45101),()=>receiver.Recording.Snapshot()):null;
+if(api is not null){api.ShutdownRequested=()=>stop.Cancel();api.Start();}
 Console.WriteLine($"Receiver listening on {argsMap.Get("address","127.0.0.1")}:{receiver.Port}; recording: {recording?.DirectoryPath??"OFF"}.");
 if(argsMap.Double("seconds",0)>0)stop.CancelAfter(TimeSpan.FromSeconds(argsMap.Double("seconds",0)));
 Task? interactive=null;
@@ -51,13 +51,14 @@ if(argsMap.Has("interactive"))interactive=Task.Run(async()=>
 });
 try
 {
-    while(!stop.IsCancellationRequested){await Task.Delay(1000,stop.Token);Console.WriteLine(JsonSerializer.Serialize(new{acquisition=receiver.Snapshot(),recording=recording?.Snapshot()}));}
+    while(!stop.IsCancellationRequested){await Task.Delay(1000,stop.Token);Console.WriteLine(JsonSerializer.Serialize(new{acquisition=receiver.Snapshot(),recording=receiver.Recording.Snapshot()}));}
 }
 catch(OperationCanceledException){}
 // Console input can remain blocked on Windows despite cancellation; it must not hold up shutdown.
 if(interactive is { IsCompleted: true }){try{await interactive;}catch(OperationCanceledException){}}
+if(api is not null)await api.DisposeAsync();
 bool drained=await receiver.StopSourcesAsync();
 await receiver.DisposeAsync();
-if(recording is not null)await recording.CompleteAsync(drained);
-await File.WriteAllTextAsync(argsMap.Get("summary","host-summary.json"),JsonSerializer.Serialize(new{acquisition=receiver.Snapshot(),recording=recording?.Snapshot()},new JsonSerializerOptions{WriteIndented=true}));
-if(recording?.Failed==true)Environment.ExitCode=2;
+await receiver.Recording.StopAsync(drained);
+await File.WriteAllTextAsync(argsMap.Get("summary","host-summary.json"),JsonSerializer.Serialize(new{acquisition=receiver.Snapshot(),recording=receiver.Recording.Snapshot()},new JsonSerializerOptions{WriteIndented=true}));
+if(receiver.Recording.Failed)Environment.ExitCode=2;

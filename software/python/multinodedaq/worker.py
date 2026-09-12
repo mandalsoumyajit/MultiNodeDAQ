@@ -36,7 +36,9 @@ class AnalysisWorker:
             magnitude=np.abs(fam['scf']);profile=magnitude.max(axis=0)
             fi=np.unique(np.linspace(0,len(fam['frequency_hz'])-1,min(32,len(fam['frequency_hz'])),dtype=int));ai=np.unique(np.linspace(0,len(fam['alpha_hz'])-1,min(64,len(fam['alpha_hz'])),dtype=int))
             pi=np.unique(np.linspace(0,len(ordinary['frequency_hz'])-1,min(256,len(ordinary['frequency_hz'])),dtype=int))
-            values=dict(frequency_hz=ordinary['frequency_hz'][pi].tolist(),psd=ordinary['psd'][pi].tolist(),asd=ordinary['asd'][pi].tolist(),power=ordinary['power'].tolist(),rms=ordinary['rms'].tolist(),mean=ordinary['mean'].tolist(),
+            band=ordinary['frequency_hz']<=self.fam.settings.max_frequency
+            band_power=ordinary['psd'][band].sum(axis=0)*(f.rate/len(window))
+            values=dict(band_power=band_power.tolist(),band_max_hz=self.fam.settings.max_frequency,frequency_hz=ordinary['frequency_hz'][pi].tolist(),psd=ordinary['psd'][pi].tolist(),asd=ordinary['asd'][pi].tolist(),power=ordinary['power'].tolist(),rms=ordinary['rms'].tolist(),mean=ordinary['mean'].tolist(),
                         scf_frequency_hz=fam['frequency_hz'][fi].tolist(),alpha_hz=fam['alpha_hz'][ai].tolist(),scf_magnitude=magnitude[fi[:,None],ai[None,:]].tolist(),scf_grid_valid=fam['valid_grid'][fi[:,None],ai[None,:]].tolist(),alpha_profile=profile[ai].tolist(),processing_seconds=time.perf_counter()-started)
             output.append(self.result(f,first,self.fam.count,True,values,context,status))
         return output

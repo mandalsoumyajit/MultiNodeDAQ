@@ -90,3 +90,7 @@ This release work starts before Stage 6; Stage 6 qualifies the finished distribu
 6. **Stage 6:** qualify the exact release package on a clean supported Windows laptop without Git, SDKs, a preinstalled .NET runtime, Python or internet access. Test an ordinary user account, paths containing spaces, a different username, readonly application files, optional analysis absent/present, upgrade, rollback, interrupted install, incompatible versions and uninstall with recordings retained. Verify LAN/firewall behavior on the real network without silently changing system policy.
 
 The immediate acceptance target is simple: another person copies one release to a clean laptop, runs the two-node synthetic demo without installing developer tools, and can report its exact version/commit and attach a useful diagnostic bundle. The next target is the same experience with recording and the two Pico nodes.
+
+## Stage 4 delivery
+
+The WPF desktop now has a self-contained Windows x64 ZIP builder, per-file SHA-256 manifest, source/dirty build identity, per-user version-directory installer and Start menu shortcut. Existing versions are preserved. The optional Python environment remains separate. Publish-specific win-x64 lock files avoid modifying the normal development dependency locks. See software/docs/stage4-operation.md for installation, service lifetime and rollback instructions. Signing and clean-machine/offline qualification remain Stage 6.

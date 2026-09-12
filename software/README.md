@@ -1,6 +1,6 @@
 # MultiNodeDAQ software: Stages 0–3
 
-C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. Stage 3 adds live Python SCF analysis and HDF5 export; GUI and Pico firmware remain later stages.
+C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. Stage 3 adds live Python SCF analysis and HDF5 export; Stage 4 adds the WPF GUI; Pico firmware remains Stage 5.
 
 ## Quick verification (Windows x64)
 
@@ -13,7 +13,7 @@ From this directory:
 .\scripts\test.ps1
 ```
 
-The script uses `.tools/dotnet/dotnet.exe` if present, otherwise `dotnet` on PATH (or pass `-Dotnet`). It performs locked restore, Release build, independent C# fixture checks, real-socket Stage 1 integration tests, Stage 2 recording/recovery tests, and Python unittest discovery. All NuGet sources are disabled because Stage 0 requires no third-party packages; project lock files are included. WPF requires the Windows desktop targeting pack included in the Windows SDK distribution. The desktop project is currently a class-library boundary, not a runnable UI.
+The script uses `.tools/dotnet/dotnet.exe` if present, otherwise `dotnet` on PATH (or pass `-Dotnet`). It performs locked restore, Release build, independent C# fixture checks, real-socket Stage 1 integration tests, Stage 2 recording/recovery tests, and Python unittest discovery. All NuGet sources are disabled because Stage 0 requires no third-party packages; project lock files are included. WPF requires the Windows desktop targeting pack included in the Windows SDK distribution. The desktop project is a runnable WPF application. Packaging explicitly enables the official NuGet feed for the pinned self-contained Microsoft runtime packs; normal development restore uses the checked-in lock files.
 
 Standalone Python check:
 
@@ -96,3 +96,9 @@ The canonical repository is `C:\dev\MultiNodeDAQ`, outside OneDrive. Use host `-
 ## Stage 3 analysis
 
 See the [operation guide](docs/stage3-operation.md), [paper-based FAM method](docs/spectral-method.md), [offline notebook](python/notebooks/offline_scf.ipynb), and [qualification report](docs/stage3-test-report.md).
+
+## Stage 4 operator application
+
+See [operation](docs/stage4-operation.md), [plotting decision](docs/stage4-plotting.md), and [test report](docs/stage4-test-report.md). Build the full solution and run scripts/demo-stage4.ps1 for two synthetic units. scripts/package-stage4.ps1 creates the self-contained Windows x64 package; install-stage4.ps1 installs an immutable per-user version with rollback by selecting a previous release.
+
+The normal test script now includes the WPF/desktop tests. scripts/test-stage4-live.py additionally exercises actual GUI restart, Python staleness and sixteen-unit recording continuity.

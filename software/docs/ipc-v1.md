@@ -46,3 +46,15 @@ Python failure or slow consumption cannot block acquisition, recording or basic 
 CONTROL `analysis_settings` returns `details` containing `revision` and a settings object (null until configured). CONTROL `configure_analysis` takes `args.settings` with all fields: `rate`, `df`, `dalpha`, `max_frequency`, `max_alpha`, `hop_fraction`, and integer `pair_batch`. Successful reply reports the requested revision; application remains asynchronous. Worker RESULT `parameters.revision` and actual resolutions identify the applied plan. Rejected plans generate an invalid RESULT naming `values.rejected_revision`; the previous plan continues. A client should compare desired and applied revisions and result age. Settings currently apply globally.
 
 Subscription CONTROL events have correlation zero: `subscription_status.details` contains queue bounds and cumulative skipped rows; `context` carries unit/session and Base64 metadata frames (not sample arrays), followed by a binary BLOCK. Stream sockets are dedicated and unsubscribed by closing them. Status and result traffic use a separate authenticated connection. Nonzero control IDs must increase monotonically on each connection. Responses carry operation-specific data in `details`.
+
+## Stage 4 additions
+
+The GUI uses status with compact=true, analysis_unit and analysis_session to request the selected detailed result plus a bounded fleet analysis_summary. This avoids transferring every full SCF preview for a large fleet. Legacy status calls keep their Stage 3 form plus additive fields.
+
+- preview: unit, acquisition_session, seconds (0.01–0.5). Returns up to 400 min/max bins per axis, mean/RMS, clipping count, quality flags, missing rows, sample range, rate, calibration/timing IDs and host receive age. Missing bins are JSON null.
+- start_recording: directory. Creates a new recording directory, then attaches it atomically to incoming frames with known metadata. Duplicate start fails.
+- stop_recording: no args. Stops and drains sources, finalizes the recorder, and returns its final state. Sources may subsequently be re-armed for preview. Allow up to 40 seconds at the client.
+- shutdown: no args. Acknowledges request acceptance; the host then stops and drains acquisition, closes recording, and exits.
+- status.analysis entries include rejection when a worker rejected a requested revision. The rejection is retained even if old valid results resume; cleared on a new configuration request or successful current-revision application.
+
+All additions retain authentication, framing, request correlation, CRC and loopback restrictions. Their effects belong to the host, not the lifetime of a GUI connection.

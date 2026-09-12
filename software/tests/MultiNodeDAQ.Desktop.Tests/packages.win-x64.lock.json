@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0": {
+    "net10.0-windows7.0": {
       "multinodedaq.acquisition": {
         "type": "Project",
         "dependencies": {
@@ -16,6 +16,12 @@
           "MultiNodeDAQ.Protocol": "[1.0.0, )"
         }
       },
+      "multinodedaq.desktop": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Acquisition": "[1.0.0, )"
+        }
+      },
       "multinodedaq.protocol": {
         "type": "Project"
       },
@@ -24,7 +30,15 @@
         "dependencies": {
           "MultiNodeDAQ.Protocol": "[1.0.0, )"
         }
+      },
+      "multinodedaq.simulator": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Core": "[1.0.0, )",
+          "MultiNodeDAQ.Protocol": "[1.0.0, )"
+        }
       }
-    }
+    },
+    "net10.0-windows7.0/win-x64": {}
   }
 }

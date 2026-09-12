@@ -1,7 +1,7 @@
 # Staged software implementation plan
 
 Date: 12 September 2026  
-Status: **Stages 0–3 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stage 3 adds independently tested Python access/export, paper-based FAM SCF analysis and GUI-ready settings; Stages 4-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
+Status: **Stages 0–3 completed and Stage 4 implemented on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stage 3 adds independently tested Python access/export, paper-based FAM SCF analysis and GUI-ready settings; Stage 4 provides the operator GUI; Stages 5-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
 Design basis: [Base-station software plan](Base_Station_Software_Plan.md) and [detector architecture](Architecture_and_Design_Options.md).
 
 ## 1. Scope and decisions
@@ -22,7 +22,7 @@ These update the earlier all-Python/PySide recommendation. WPF is Windows-specif
 
 ## 2. Proposed implementation layout
 
-Stage 0 created these project boundaries. Stage 1 implements the simulator, receiver and command state; Stages 2 and 3 now implement recording and Python live analysis; desktop remains a later-stage boundary:
+Stage 0 created these project boundaries. Stage 1 implements the simulator, receiver and command state; Stages 2 and 3 now implement recording and Python live analysis; Stage 4 implements the desktop operator application:
 
 ```text
 MultiNodeDAQ/software/
@@ -55,7 +55,7 @@ Follow the [deployment and version-control plan](Deployment_and_Version_Control.
 | 1 (complete) | Simulator and multi-unit receiver | 0 | Laptop |
 | 2 (complete) | Durable recording, verification and replay reader | 1 | Laptop + local SSD |
 | 3 (complete) | Python client/worker and export | 2 | Laptop |
-| 4 | Operator GUI and live diagnostics | 2; spectra require 3 | Laptop |
+| 4 (implemented) | Operator GUI and live diagnostics | 2; spectra require 3 | Laptop |
 | 5 | Two Pico synthetic-streaming prototype | Stable 0; end-to-end test uses 2-4 | Two Pico 2 W boards, AP, USB packs |
 | 6 | Load/failure qualification and field package | 2-5 | Target laptop and boards |
 | 7 | ADC/timing/calibration integration | 6 plus hardware availability | Detector hardware |
@@ -123,6 +123,8 @@ IPC sends binary little-endian int32 arrays with versioned metadata, never JSON 
 **Gate:** Python reconstructs C# fixture/log samples exactly. HDF5 round trip preserves codes and all gap/configuration/timing records. A bin-centered calibrated test tone has integrated power within 1% of its known value under the specified estimator; seeded broadband tests use documented statistical tolerance. Live and replay windows match to stated floating-point tolerance. Kill or stall Python repeatedly: recording continuity is unchanged, C# health continues, and analysis is visibly unavailable/stale. Exports must not be required to close a recording session.
 
 ## 8. Stage 4: Windows operator interface
+
+Implemented after GUI mockup approval. See [operation](software/docs/stage4-operation.md), [plotting decision](software/docs/stage4-plotting.md) and [test report](software/docs/stage4-test-report.md). Replay spectra/HDF5 remain available through Python; the first GUI replay view covers waveforms/events/CSV. Extended clean-machine/field qualification remains Stage 6.
 
 **Deliverables**
 

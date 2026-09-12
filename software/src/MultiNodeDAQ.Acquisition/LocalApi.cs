@@ -9,6 +9,7 @@ namespace MultiNodeDAQ.Acquisition;
 public sealed class LocalApi : IAsyncDisposable
 {
     private readonly Receiver receiver;
+    public Action? ShutdownRequested {get;set;}
     private readonly Func<object?> recording;
     private readonly byte[] token;
     private readonly TcpListener listener;
@@ -16,8 +17,10 @@ public sealed class LocalApi : IAsyncDisposable
     private readonly object gate=new();
     private readonly HashSet<Task> clients=[];
     private readonly Dictionary<string,(JsonElement Result,long Time)> results=[];
+    private readonly Dictionary<string,JsonElement> rejections=[];
     private readonly SemaphoreSlim slots=new(16);
     private Task? accept;
+    private int disposed;
     private long settingsRevision;
     private JsonElement? analysisSettings;
     public LocalApi(Receiver receiver,string token,int port=45101,Func<object?>? recording=null)
@@ -52,7 +55,7 @@ public sealed class LocalApi : IAsyncDisposable
                     Wire.Check(authenticated && message.Request==0 && message.Payload.Length<=262144,"result authentication/size");
                     string u=Metadata.Text(o,"unit"),sid=Metadata.Text(o,"acquisition_session");Wire.Check(u.Length==32 && sid.Length==32 && u.All(char.IsAsciiHexDigit) && sid.All(char.IsAsciiHexDigit),"result identity");
                     Metadata.Text(o,"result");Metadata.Text(o,"algorithm");Metadata.Counter(o,"first_sample");Metadata.Number(o,"count");Metadata.Bool(o,"valid");Metadata.Object(o,"parameters");Metadata.Object(o,"values");
-                    lock(gate){string key=u+":"+sid;Wire.Check(results.ContainsKey(key)||results.Count<128,"result capacity");results[key]=(o.Clone(),Stopwatch.GetTimestamp());}continue;
+                    lock(gate){string key=u+":"+sid;Wire.Check(results.ContainsKey(key)||results.Count<128,"result capacity");results[key]=(o.Clone(),Stopwatch.GetTimestamp());if(o.GetProperty("values").TryGetProperty("rejected_revision",out _))rejections[key]=o.GetProperty("values").Clone();else if(o.GetProperty("valid").GetBoolean()&&o.GetProperty("parameters").TryGetProperty("revision",out var applied)&&applied.GetInt64()==settingsRevision)rejections.Remove(key);}continue;
                 }
                 Wire.Check(message.Kind==1 && message.Request>previous && Metadata.Counter(o,"request_id")==message.Request,"control correlation");previous=message.Request;
                 string op=Metadata.Text(o,"op");var args=Metadata.Field(o,"args");object? value=null;string? error=null;
@@ -62,13 +65,23 @@ public sealed class LocalApi : IAsyncDisposable
                     {
                         Wire.Check(op=="authenticate" && Metadata.Number(args,"protocol")==1 && Metadata.Text(args,"role") is "analysis" or "reader" or "gui","authentication required");
                         Wire.Check(CryptographicOperations.FixedTimeEquals(token,System.Text.Encoding.UTF8.GetBytes(Metadata.Text(args,"token"))),"authentication failed");authenticated=true;
-                        value=new{protocol=1,capabilities=new[]{"status","subscribe","node_command","result","analysis_settings","configure_analysis"}};
+                        value=new{protocol=1,capabilities=new[]{"status","subscribe","node_command","result","analysis_settings","configure_analysis","preview","start_recording","stop_recording","shutdown"}};
                     }
                     else if(op=="status")
                     {
-                        object[] health;lock(gate)health=results.Values.Select(x=>(object)new{result=x.Result,age_seconds=Stopwatch.GetElapsedTime(x.Time).TotalSeconds,stale=Stopwatch.GetElapsedTime(x.Time).TotalSeconds>3}).ToArray();
-                        value=new{acquisition=receiver.Snapshot(),recording=recording(),analysis=health};
+                        object[] health;bool compact=args.TryGetProperty("compact",out var compactValue)&&compactValue.ValueKind==JsonValueKind.True;lock(gate)health=results.Where(x=>!compact||(args.TryGetProperty("analysis_unit",out var selectedUnit)&&args.TryGetProperty("analysis_session",out var selectedSession)&&x.Key.Equals(selectedUnit.GetString()+":"+selectedSession.GetString(),StringComparison.OrdinalIgnoreCase))).Select(x=>(object)new{result=x.Value.Result,age_seconds=Stopwatch.GetElapsedTime(x.Value.Time).TotalSeconds,stale=Stopwatch.GetElapsedTime(x.Value.Time).TotalSeconds>3,rejection=rejections.TryGetValue(x.Key,out var rejected)?(JsonElement?)rejected:null}).ToArray();
+                        object[] summaries;lock(gate)summaries=results.Values.Select(x=>(object)new{unit=x.Result.GetProperty("unit"),acquisition_session=x.Result.GetProperty("acquisition_session"),valid=x.Result.GetProperty("valid"),age_seconds=Stopwatch.GetElapsedTime(x.Time).TotalSeconds}).ToArray();
+                        value=new{acquisition=receiver.Snapshot(),recording=recording(),analysis=health,analysis_summary=summaries};
                     }
+                    else if(op=="preview")
+                    {double span=Metadata.Field(args,"seconds").GetDouble();Wire.Check(double.IsFinite(span)&&span>=.01&&span<=.5,"preview span 0.01 to 0.5 seconds");value=receiver.Preview(Metadata.Text(args,"unit"),Metadata.Text(args,"acquisition_session"),span);}
+                    else if(op=="start_recording")value=receiver.Recording.Start(Metadata.Text(args,"directory"));
+                    else if(op=="stop_recording")
+                    {
+                        // Confirm the terminal sample watermark before finalizing. Sampling can be restarted explicitly.
+                        bool drained=await receiver.StopSourcesAsync();value=await receiver.Recording.StopAsync(drained);
+                    }
+                    else if(op=="shutdown"){Wire.Check(ShutdownRequested is not null,"shutdown not available");value=new{state="shutdown requested"};}
                     else if(op=="analysis_settings")
                     {lock(gate)value=new{revision=settingsRevision,settings=analysisSettings};}
                     else if(op=="configure_analysis")
@@ -80,7 +93,7 @@ public sealed class LocalApi : IAsyncDisposable
                         double rate=Get("rate"),df=Get("df"),da=Get("dalpha"),hop=Get("hop_fraction");
                         Wire.Check(rate<=1_000_000 && df<=rate/4 && da<=rate && hop<=.5 && Get("max_frequency")<=rate/2 && Get("max_alpha")<=rate,"FAM setting bounds");
                         Wire.Check(Metadata.Number(settings,"pair_batch") is >=1 and <=4096,"pair batch");
-                        lock(gate){analysisSettings=settings.Clone();settingsRevision++;value=new{revision=settingsRevision,settings=analysisSettings,state="requested"};}
+                        lock(gate){analysisSettings=settings.Clone();settingsRevision++;rejections.Clear();value=new{revision=settingsRevision,settings=analysisSettings,state="requested"};}
                     }
                     else if(op=="subscribe")
                     {
@@ -95,8 +108,9 @@ public sealed class LocalApi : IAsyncDisposable
                     }
                     else throw new ContractException("unsupported operation");
                 }
-                catch(Exception e) when(e is ContractException or TimeoutException or IOException){error=e.Message;}
+                catch(Exception e) when(e is ContractException or TimeoutException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException){error=e.Message;}
                 await Send(stream,1,message.Request,new{op,request_id=message.Request.ToString(),ok=error is null,error,details=value},deadline.Token);
+                if(op=="shutdown" && error is null)ShutdownRequested?.Invoke();
                 if(!authenticated)break;
                 if(subscription is not null)
                 {
@@ -113,5 +127,5 @@ public sealed class LocalApi : IAsyncDisposable
         catch(Exception e) when(e is IOException or SocketException or OperationCanceledException or ContractException or JsonException or InvalidOperationException or ObjectDisposedException){}
         finally{if(subscription is not null)receiver.Live.Remove(subscription);}
     }
-    public async ValueTask DisposeAsync(){stop.Cancel();listener.Stop();if(accept is not null)await accept;Task[] tasks;lock(gate)tasks=clients.ToArray();await Task.WhenAll(tasks);stop.Dispose();}
+    public async ValueTask DisposeAsync(){if(Interlocked.Exchange(ref disposed,1)!=0)return;stop.Cancel();listener.Stop();if(accept is not null)await accept;Task[] tasks;lock(gate)tasks=clients.ToArray();await Task.WhenAll(tasks);stop.Dispose();}
 }

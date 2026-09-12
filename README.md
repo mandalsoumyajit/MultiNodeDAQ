@@ -8,7 +8,7 @@ The first application is a distributed triaxial magnetic-field detector. The arc
 
 ## Current status
 
-Stages 0–3 are qualified with software simulators. The Stage 2 two-hour, sixteen-node recording run passed, including independent verification of all 144 segments: 2,879,978,240 XYZ rows with no missing samples or sample errors. See the [qualification report](software/docs/stage2-test-report.md). Stage 3 adds Python recording access, lossless HDF5 export, live SCF/PSD analysis, and runtime settings for the future GUI. See [Python setup and operation](software/docs/stage3-operation.md). A desktop GUI and Pico 2 W firmware remain planned; an optional offline Python wheel bundle is available through the packaging script, while the complete application installer remains future work.
+Stages 0–3 are qualified with software simulators. The Stage 2 two-hour, sixteen-node recording run passed, including independent verification of all 144 segments: 2,879,978,240 XYZ rows with no missing samples or sample errors. See the [qualification report](software/docs/stage2-test-report.md). Stage 3 adds Python recording access, lossless HDF5 export, live SCF/PSD analysis, and runtime settings for the GUI. See [Python setup and operation](software/docs/stage3-operation.md). Stage 4 now provides the WPF operator GUI, replay controls, live diagnostics, selectable spectral settings and a self-contained Windows package with versioned per-user installation. Pico 2 W firmware remains Stage 5. Extended offline/field qualification remains Stage 6.
 
 The solution is `software/MultiNodeDAQ.slnx`, C# projects use `MultiNodeDAQ.*`, and the Python package is `multinodedaq`. The ELF-prefixed wire magic and `.elflog` format retain their existing v1 identifiers for compatibility. Local development is at `C:\dev\MultiNodeDAQ`.
 
@@ -20,7 +20,7 @@ Use Windows x64, .NET SDK 10.0.401 and Python 3.12 for the pinned analysis envir
 cd software
 .\scripts\setup-stage3.ps1
 .\scripts\test.ps1
-.\scripts\demo.ps1
+.\scripts\demo-stage4.ps1
 ```
 
 The [software guide](software/README.md) includes SDK setup and commands for running separate simulator and receiver processes. Tests use loopback TCP; they do not establish Wi-Fi range or hardware timing performance.
@@ -35,3 +35,9 @@ The [software guide](software/README.md) includes SDK setup and commands for run
 - [Contributing](CONTRIBUTING.md)
 
 Sensor transport currently assumes a trusted network and does not implement authentication or encryption. See [security scope](SECURITY.md).
+
+## Stage 4 desktop
+
+The Windows operator GUI is implemented: fleet status, recording controls, XYZ envelopes and C# diagnostics, optional spectral views/settings, replay and reports. See [operator guide](software/docs/stage4-operation.md) and [test results](software/docs/stage4-test-report.md).
+
+From the software directory, run scripts/demo-stage4.ps1 in PowerShell 7 after a Release build. Self-contained Windows x64 packaging and per-user versioned installation are available through scripts/package-stage4.ps1. Hardware firmware remains Stage 5; extended field and offline deployment qualification remains Stage 6.
