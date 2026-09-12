@@ -7,15 +7,15 @@ if (-not $Dotnet) {
 }
 Push-Location $taskRoot
 try {
-    & $Dotnet restore ElfDaq.slnx --locked-mode
+    & $Dotnet restore MultiNodeDAQ.slnx --locked-mode
     if ($LASTEXITCODE -ne 0) { throw 'Locked restore failed' }
-    & $Dotnet build ElfDaq.slnx --no-restore -c Release
+    & $Dotnet build MultiNodeDAQ.slnx --no-restore -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
-    & $Dotnet run --project tests/Elf.Contracts.Tests -c Release --no-build -- fixtures
+    & $Dotnet run --project tests/MultiNodeDAQ.Contracts.Tests -c Release --no-build -- fixtures
     if ($LASTEXITCODE -ne 0) { throw 'C# tests failed' }
-    & $Dotnet run --project tests/Elf.Integration.Tests -c Release --no-build
+    & $Dotnet run --project tests/MultiNodeDAQ.Integration.Tests -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Stage 1 integration tests failed' }
-    & $Dotnet run --project tests/Elf.Recording.Tests -c Release --no-build
+    & $Dotnet run --project tests/MultiNodeDAQ.Recording.Tests -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw "Stage 2 recording tests failed" }
     & $Python -m unittest discover -s python/tests -v
     if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }

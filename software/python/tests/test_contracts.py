@@ -3,7 +3,7 @@ from pathlib import Path
 from dataclasses import replace
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from elfdaq.contracts import *
+from multinodedaq.contracts import *
 FIX=ROOT.parent/'fixtures'
 class Contracts(unittest.TestCase):
     def test_fixtures(self):

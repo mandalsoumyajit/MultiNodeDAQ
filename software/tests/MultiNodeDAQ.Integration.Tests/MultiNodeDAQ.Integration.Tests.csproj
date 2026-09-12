@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup><ProjectReference Include="../../src/MultiNodeDAQ.Acquisition/MultiNodeDAQ.Acquisition.csproj"/><ProjectReference Include="../../src/MultiNodeDAQ.Simulator/MultiNodeDAQ.Simulator.csproj"/></ItemGroup></Project>

@@ -1,0 +1,41 @@
+{
+  "scope": "loopback; simulator and receiver share a process; OS flush, not physical power-loss qualification",
+  "nodes": 16,
+  "seconds": 7200,
+  "rows": 2879978240,
+  "scalar_samples": 8639934720,
+  "segment_count": 144,
+  "log_bytes": 35952670013,
+  "build": "0.2.0-stage2+de6c28b9679fd9a90cdaa8ca10596e145d39b59b",
+  "peak_queue_bytes": 2240820,
+  "memory": {
+    "managed_bytes": {
+      "first_third_median": 16130580.0,
+      "last_third_median": 18731056.0,
+      "growth": 2600476.0,
+      "peak": 30028792,
+      "allowed_growth": 33554432
+    },
+    "working_set_bytes": {
+      "first_third_median": 86134784.0,
+      "last_third_median": 92542976.0,
+      "growth": 6408192.0,
+      "peak": 101908480,
+      "allowed_growth": 67108864
+    }
+  },
+  "checks": {
+    "duration": true,
+    "scenario": true,
+    "verification": true,
+    "recording": true,
+    "totals": true,
+    "units": true,
+    "source": true,
+    "continuity": true,
+    "queues": true,
+    "memory_growth": true
+  },
+  "passed": true,
+  "full_duration_gate": true
+}

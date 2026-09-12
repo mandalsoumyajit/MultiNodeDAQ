@@ -8,4 +8,4 @@ Keep acquisition and recording independent of optional display and analysis cons
 
 Do not commit SDKs, build outputs, credentials, or large recordings. Long qualification runs write ignored artifacts under `software/.artifacts`; commit only compact evidence and reports. A short smoke test does not replace the documented full-duration qualification.
 
-Source code is currently transitioning from the original ELF-specific naming to MultiNodeDAQ. Avoid unrelated format or namespace changes in functional pull requests.
+Use `MultiNodeDAQ.*` for C# namespaces and `multinodedaq` for Python imports. Keep existing wire and log identifiers compatible unless a separately documented protocol revision is intended.

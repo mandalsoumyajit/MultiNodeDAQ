@@ -1,7 +1,7 @@
 # Deployment, releases and version control
 
 Date: 12 September 2026  
-Status: agreed architecture extended with a proposed release process. The local repository is established at `C:\dev\ElfDaq`, with baseline commit `90e0b51`. Stage 2 includes compiled build identity and recording provenance. The public MIT-licensed repository is [MultiNodeDAQ](https://github.com/mandalsoumyajit/MultiNodeDAQ). Portable deployment packaging remains planned.
+Status: agreed architecture extended with a proposed release process. The local repository is established at `C:\dev\MultiNodeDAQ`, with baseline commit `90e0b51`. Stage 2 includes compiled build identity and recording provenance. The public MIT-licensed repository is [MultiNodeDAQ](https://github.com/mandalsoumyajit/MultiNodeDAQ). Portable deployment packaging remains planned.
 
 ## Recommended deployment
 
@@ -15,7 +15,7 @@ The current Stage 1 build output is a developer build, not yet a qualified porta
 
 ## Source control and collaboration
 
-The original OneDrive workspace was not a functioning Git repository. A dedicated local repository now exists at `C:\dev\ElfDaq`, containing the C# solution, Python package, Pico firmware, contracts, small fixtures, release scripts and documentation. Keep development clones outside actively synchronized OneDrive folders. Investigate/preserve any existing `.git` metadata before moving or replacing anything; this plan does not modify it.
+The original OneDrive workspace was not a functioning Git repository. A dedicated local repository now exists at `C:\dev\MultiNodeDAQ`, containing the C# solution, Python package, Pico firmware, contracts, small fixtures, release scripts and documentation. Keep development clones outside actively synchronized OneDrive folders. Investigate/preserve any existing `.git` metadata before moving or replacing anything; this plan does not modify it.
 
 Use an institution-supported private Git host. Developers clone the repository, work on short-lived branches, run checks and merge reviewed changes into `main`. Each machine has its own clone. Operators receive release packages rather than editing installed code or pulling a development branch. The local source location is established; the remote host remains to be selected. No remote has been created or contacted for publication.
 
@@ -41,7 +41,7 @@ Expose product version, full commit and supported formats through `--version`, t
 Suggested release contents:
 
 ```text
-ElfDaq-<version>-win-x64/
+MultiNodeDAQ-<version>-win-x64/
     app/                         published host; GUI when available
     tools/simulator/             separately runnable simulator
     defaults/                    versioned configuration templates
@@ -61,8 +61,8 @@ Aim first for repeatable builds with complete provenance. Deterministic compiler
 
 Keep installed binaries separate from mutable state:
 
-- Per-user version folders under `%LOCALAPPDATA%\ElfDaq\releases\<version>` for the initial ZIP/launcher scheme; an installer may manage its own application location later.
-- Machine/user settings under `%LOCALAPPDATA%\ElfDaq\config`, with an explicit schema version and an export/import command.
+- Per-user version folders under `%LOCALAPPDATA%\MultiNodeDAQ\releases\<version>` for the initial ZIP/launcher scheme; an installer may manage its own application location later.
+- Machine/user settings under `%LOCALAPPDATA%\MultiNodeDAQ\config`, with an explicit schema version and an export/import command.
 - Diagnostic logs in a separate application-state directory.
 - Recordings in an operator-selected data directory, initially a local SSD, independent of the installed application version.
 

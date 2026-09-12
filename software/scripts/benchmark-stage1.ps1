@@ -8,7 +8,7 @@ if (-not $Dotnet) {
 Push-Location $taskRoot
 try {
     foreach ($taskNodes in @(2,16)) {
-        & $Dotnet run --project tests/Elf.Integration.Tests -c Release --no-build -- --benchmark --nodes $taskNodes --seconds $Seconds
+        & $Dotnet run --project tests/MultiNodeDAQ.Integration.Tests -c Release --no-build -- --benchmark --nodes $taskNodes --seconds $Seconds
         if ($LASTEXITCODE -ne 0) { throw "Benchmark failed: $taskNodes nodes" }
     }
     & $Python scripts/analyze_stage1.py --seconds $Seconds

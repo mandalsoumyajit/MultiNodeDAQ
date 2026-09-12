@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "multinodedaq.core": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Protocol": "[1.0.0, )"
+        }
+      },
+      "multinodedaq.protocol": {
+        "type": "Project"
+      },
+      "multinodedaq.recording": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Protocol": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

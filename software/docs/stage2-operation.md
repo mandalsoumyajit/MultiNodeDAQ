@@ -1,19 +1,19 @@
 # Stage 2 recording, verification and replay
 
-Development repository: `C:\dev\ElfDaq`; commands below run from its `software` directory. Implementation and short tests are available; the full two-hour gate is reported separately.
+Development repository: `C:\dev\MultiNodeDAQ`; commands below run from its `software` directory. The full two-hour qualification passed; see the [test report](stage2-test-report.md) for evidence and scope.
 
 ## Record and inspect
 
 Build with `scripts/test.ps1` using the pinned local SDK. In one terminal:
 
 ```powershell
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Host -c Release --no-build -- --record C:\data\elf-run-001 --seconds 60
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Host -c Release --no-build -- --record C:\data\elf-run-001 --seconds 60
 ```
 
 In another terminal, start the simulator promptly:
 
 ```powershell
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Simulator -c Release --no-build -- --nodes 2 --seconds 50
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Simulator -c Release --no-build -- --nodes 2 --seconds 50
 ```
 
 The recording directory must not already exist. Existing files are never appended to or overwritten. The example data directory is an operator choice; the application does not change system settings. The host records only when `--record` is supplied. It prints acquisition and recording health independently. `--version` reports the compiled product version, full Git revision and dirty-tree marker. The manifest and segment-start events preserve that build identity; node HELLO records preserve source firmware/build declarations and synthetic-data labeling.
@@ -23,8 +23,8 @@ On timed shutdown or Ctrl+C, the host requests stop from connected nodes in para
 Verify a complete directory or inspect a single interrupted file:
 
 ```powershell
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Host -c Release --no-build -- --verify C:\data\elf-run-001 --summary verify.json
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Host -c Release --no-build -- --verify C:\data\elf-run-001\UNIT-SESSION-00000.elflog
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Host -c Release --no-build -- --verify C:\data\elf-run-001 --summary verify.json
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Host -c Release --no-build -- --verify C:\data\elf-run-001\UNIT-SESSION-00000.elflog
 ```
 
 Directory verification checks manifest hashes, recording identity, canonical segment names/order, prior-range continuity, all record CRCs, metadata dependencies, sample bounds, commit semantics and footer counts. Counter-mode recordings also get exact code verification. Single-file inspection reports its validated byte prefix and distinguishes incomplete, truncated and corrupt. It can read a rotated segment independently, but its declared prior coverage is not proof of earlier segments; directory verification checks that context against the preceding files. A COMMIT marker found after a crash is structural evidence, not proof of storage power-loss protection.
@@ -36,7 +36,7 @@ Directory verification checks manifest hashes, recording identity, canonical seg
 CLI replay emits CSV to a new output file, with a JSON sidecar carrying unit/session/range, completeness, gaps and the exact metadata frames encoded in Base64:
 
 ```powershell
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Host -c Release --no-build -- --replay C:\data\elf-run-001 --unit UNIT_HEX --session SESSION_HEX --first 0 --count 4096 --output replay.csv
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Host -c Release --no-build -- --replay C:\data\elf-run-001 --unit UNIT_HEX --session SESSION_HEX --first 0 --count 4096 --output replay.csv
 ```
 
 Use actual unit and acquisition-session identifiers from the manifest. CSV rows include sample index, XYZ codes, flags, configuration, calibration and timing IDs. `--speed 1` paces block output approximately at nominal rate; default 0 exports immediately. This CLI is an offline replay source, not a node TCP emulator or the future GUI player. No interpolation fills gaps.

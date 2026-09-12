@@ -1,7 +1,7 @@
 # Staged software implementation plan
 
 Date: 12 September 2026  
-Status: **Stages 0 and 1 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 implementation is available and undergoing its two-hour recording gate; Stages 3-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
+Status: **Stages 0–2 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stages 3-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
 Design basis: [Base-station software plan](Base_Station_Software_Plan.md) and [detector architecture](Architecture_and_Design_Options.md).
 
 ## 1. Scope and decisions
@@ -27,16 +27,16 @@ Stage 0 created these project boundaries. Stage 1 implements the simulator, rece
 ```text
 Digital_Backend/software/
     docs/                         protocol, recording, IPC and operator specifications
-    src/Elf.Protocol/             frames, validation, sample decoding; no UI dependency
-    src/Elf.Core/                 sessions, node registry, counters and quality models
-    src/Elf.Recording/            writer, scanner, indices and recovery
-    src/Elf.Acquisition/          network listeners, bounded queues and subscriptions
-    src/Elf.Host/                 headless executable and control API
-    src/Elf.Desktop/              WPF application, controls and live views
-    src/Elf.Simulator/            multi-unit protocol generator and fault injection
+    src/MultiNodeDAQ.Protocol/             frames, validation, sample decoding; no UI dependency
+    src/MultiNodeDAQ.Core/                 sessions, node registry, counters and quality models
+    src/MultiNodeDAQ.Recording/            writer, scanner, indices and recovery
+    src/MultiNodeDAQ.Acquisition/          network listeners, bounded queues and subscriptions
+    src/MultiNodeDAQ.Host/                 headless executable and control API
+    src/MultiNodeDAQ.Desktop/              WPF application, controls and live views
+    src/MultiNodeDAQ.Simulator/            multi-unit protocol generator and fault injection
     tests/                        unit, integration, durability and load tests
     fixtures/                     small shared golden binary files and expected results
-    python/elfdaq/                reader, live client, analysis worker and HDF5 export
+    python/multinodedaq/                reader, live client, analysis worker and HDF5 export
     firmware/pico_synthetic/      Pico SDK C/C++ synthetic-data source
     scripts/                      repeatable build, run, package and benchmark commands
 ```
@@ -80,8 +80,8 @@ The dependency table permits firmware work once the protocol is stable; it does 
 
 **Deliverables**
 
-- `Elf.Simulator` with configurable unit count, stable IDs, rate, encoding, deterministic seed, tones/noise, counter patterns and scripted faults.
-- `Elf.Host` CLI accepting multiple sensor clients and showing per-unit counters, rate, state, age, gaps and queue occupancy.
+- `MultiNodeDAQ.Simulator` with configurable unit count, stable IDs, rate, encoding, deterministic seed, tones/noise, counter patterns and scripted faults.
+- `MultiNodeDAQ.Host` CLI accepting multiple sensor clients and showing per-unit counters, rate, state, age, gaps and queue occupancy.
 - Incremental TCP parser, cancellation/reconnect handling, bounded pooled buffers and fairness across units.
 - A repeatable benchmark scenario file and machine-readable summary.
 
@@ -91,7 +91,7 @@ Pace simulation from an independent elapsed-time/sample schedule. Do not redefin
 
 ## 6. Stage 2: recorder, scanner and replay reader
 
-Implementation is available in `C:\dev\ElfDaq`. Short regression and sixteen-node smoke tests pass; full-duration qualification is pending. See [operation](software/docs/stage2-operation.md) and [test status](software/docs/stage2-test-report.md).
+Implementation is available in `C:\dev\MultiNodeDAQ`. Short regressions and the full two-hour, sixteen-node recording qualification pass, including sample, integrity, queue and memory checks. See [operation](software/docs/stage2-operation.md) and [test status](software/docs/stage2-test-report.md).
 
 **Deliverables**
 
@@ -111,9 +111,9 @@ Proposed sizing: sixteen int32 streams = 4.8 MB/s; ten seconds of pending payloa
 
 **Deliverables**
 
-- `elfdaq.open_session(...)` and `read_samples(...)` returning arrays plus counters, gaps, time models and calibration.
-- `elfdaq.subscribe(...)` for selected-unit live blocks; `AnalysisWorker` executable returns PSD/ASD, spectrogram slices and trends.
-- `elfdaq.export_hdf5(...)` and a notebook demonstrating offline analysis.
+- `multinodedaq.open_session(...)` and `read_samples(...)` returning arrays plus counters, gaps, time models and calibration.
+- `multinodedaq.subscribe(...)` for selected-unit live blocks; `AnalysisWorker` executable returns PSD/ASD, spectrogram slices and trends.
+- `multinodedaq.export_hdf5(...)` and a notebook demonstrating offline analysis.
 - Isolated Python environment, startup handshake, worker health and graceful restart.
 
 IPC sends binary little-endian int32 arrays with versioned metadata, never JSON per sample or Python pickle. Result messages identify unit/session, covered sample ranges, analysis version, settings, time quality and validity. Start with copied blocks; shared memory is deferred. Limit each live-analysis subscription to a bounded recent history (initially two seconds of data) and report skipped work.

@@ -4,7 +4,7 @@ import sys,json,hashlib,struct
 from dataclasses import replace
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'python'))
-from elfdaq.contracts import *
+from multinodedaq.contracts import *
 OUT=ROOT/'fixtures';OUT.mkdir(exist_ok=True)
 manifest={'version':1,'crc_check_hex':'cbf43926','cases':[]}
 unit=bytes.fromhex('00112233445566778899aabbccddeeff')

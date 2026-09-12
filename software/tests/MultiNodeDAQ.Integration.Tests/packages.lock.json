@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "multinodedaq.acquisition": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Core": "[1.0.0, )",
+          "MultiNodeDAQ.Protocol": "[1.0.0, )",
+          "MultiNodeDAQ.Recording": "[1.0.0, )"
+        }
+      },
+      "multinodedaq.core": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Protocol": "[1.0.0, )"
+        }
+      },
+      "multinodedaq.protocol": {
+        "type": "Project"
+      },
+      "multinodedaq.recording": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Protocol": "[1.0.0, )"
+        }
+      },
+      "multinodedaq.simulator": {
+        "type": "Project",
+        "dependencies": {
+          "MultiNodeDAQ.Core": "[1.0.0, )",
+          "MultiNodeDAQ.Protocol": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

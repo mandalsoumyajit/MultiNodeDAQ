@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="src/MultiNodeDAQ.Protocol/MultiNodeDAQ.Protocol.csproj" />
+  <Project Path="src/MultiNodeDAQ.Core/MultiNodeDAQ.Core.csproj" />
+  <Project Path="src/MultiNodeDAQ.Recording/MultiNodeDAQ.Recording.csproj" />
+  <Project Path="src/MultiNodeDAQ.Acquisition/MultiNodeDAQ.Acquisition.csproj" />
+  <Project Path="src/MultiNodeDAQ.Host/MultiNodeDAQ.Host.csproj" />
+  <Project Path="src/MultiNodeDAQ.Desktop/MultiNodeDAQ.Desktop.csproj" />
+  <Project Path="src/MultiNodeDAQ.Simulator/MultiNodeDAQ.Simulator.csproj" />
+  <Project Path="tests/MultiNodeDAQ.Contracts.Tests/MultiNodeDAQ.Contracts.Tests.csproj" />
+  <Project Path="tests/MultiNodeDAQ.Integration.Tests/MultiNodeDAQ.Integration.Tests.csproj" />
+  <Project Path="tests/MultiNodeDAQ.Recording.Tests/MultiNodeDAQ.Recording.Tests.csproj" />
+</Solution>

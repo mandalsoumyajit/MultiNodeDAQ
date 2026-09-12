@@ -1,1 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup></PropertyGroup><ItemGroup><ProjectReference Include="../Elf.Protocol/Elf.Protocol.csproj" /><ProjectReference Include="../Elf.Core/Elf.Core.csproj" /><ProjectReference Include="../Elf.Recording/Elf.Recording.csproj" /></ItemGroup></Project>

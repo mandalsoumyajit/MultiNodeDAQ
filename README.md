@@ -8,9 +8,9 @@ The first application is a distributed triaxial magnetic-field detector. The arc
 
 ## Current status
 
-Stages 0 and 1 are qualified with software simulators. Stage 2 recording and replay pass short regression tests; the full two-hour recording qualification is in progress. A desktop GUI, live Python analysis, and Pico 2 W firmware are planned. This is a development preview, with no portable release package yet.
+Stages 0–2 are qualified with software simulators. The Stage 2 two-hour, sixteen-node recording run passed, including independent verification of all 144 segments: 2,879,978,240 XYZ rows with no missing samples or sample errors. See the [qualification report](software/docs/stage2-test-report.md). A desktop GUI, live Python analysis, and Pico 2 W firmware are planned. This is a development preview, with no portable release package yet.
 
-Existing source projects use the original `Elf.*` namespaces and `ElfDaq.slnx` solution name. The public project name is MultiNodeDAQ; source naming will be updated after the running qualification test finishes. Existing protocol identifiers and recording formats will remain versioned compatibility contracts.
+The solution is `software/MultiNodeDAQ.slnx`, C# projects use `MultiNodeDAQ.*`, and the Python package is `multinodedaq`. The ELF-prefixed wire magic and `.elflog` format retain their existing v1 identifiers for compatibility. Local development is at `C:\dev\MultiNodeDAQ`.
 
 ## Get started
 

@@ -1,1 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup><ProjectReference Include="../../src/Elf.Recording/Elf.Recording.csproj"/><ProjectReference Include="../../src/Elf.Acquisition/Elf.Acquisition.csproj"/><ProjectReference Include="../../src/Elf.Simulator/Elf.Simulator.csproj"/></ItemGroup></Project>

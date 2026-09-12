@@ -1,6 +1,6 @@
-# ELF DAQ software: Stages 0–2
+# MultiNodeDAQ software: Stages 0–2
 
-C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification is tracked in the test report. The GUI, Python live analysis and Pico firmware remain later stages.
+C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. The GUI, Python live analysis and Pico firmware remain later stages.
 
 ## Quick verification (Windows x64)
 
@@ -12,7 +12,7 @@ From this directory:
 .\scripts\test.ps1 -Python 'C:\path\to\python.exe'
 ```
 
-The script uses `.tools/dotnet/dotnet.exe` if present, otherwise `dotnet` on PATH (or pass `-Dotnet`). It performs locked restore, Release build, independent C# fixture checks, real-socket Stage 1 integration tests (about 25 seconds), and Python unittest discovery. All NuGet sources are disabled because Stage 0 requires no third-party packages; project lock files are included. WPF requires the Windows desktop targeting pack included in the Windows SDK distribution. The desktop project is currently a class-library boundary, not a runnable UI.
+The script uses `.tools/dotnet/dotnet.exe` if present, otherwise `dotnet` on PATH (or pass `-Dotnet`). It performs locked restore, Release build, independent C# fixture checks, real-socket Stage 1 integration tests, Stage 2 recording/recovery tests, and Python unittest discovery. All NuGet sources are disabled because Stage 0 requires no third-party packages; project lock files are included. WPF requires the Windows desktop targeting pack included in the Windows SDK distribution. The desktop project is currently a class-library boundary, not a runnable UI.
 
 Standalone Python check:
 
@@ -23,7 +23,7 @@ python -m unittest discover -s python/tests -v
 Standalone C# check after build:
 
 ```powershell
-dotnet run --project tests/Elf.Contracts.Tests -c Release --no-build -- fixtures
+dotnet run --project tests/MultiNodeDAQ.Contracts.Tests -c Release --no-build -- fixtures
 ```
 
 The C# test project is a dependency-free executable harness, not an xUnit/MSTest discovery project. Use the supplied commands rather than expecting `dotnet test` to discover it. Failures exit nonzero. No expected fixture is regenerated during tests.
@@ -33,13 +33,13 @@ The C# test project is a dependency-free executable harness, not an xUnit/MSTest
 - [Sensor protocol v1](docs/protocol-v1.md): exact framing, signed samples, identity/counters, JSON message grammar, commands and reconnect semantics.
 - [Acquisition log v1](docs/elflog-v1.md): header/record envelopes, normalized int32 data, commit/close/recovery rules.
 - [Local IPC v1](docs/ipc-v1.md): C#/Python control, binary blocks and result metadata.
-- `src/Elf.Protocol`: working C# wire/IPC codecs and bounded prefix validation.
-- `src/Elf.Recording`: working log header/record envelope codec; rotating writer, manifests, independent scanner and bounded range reader.
-- `python/elfdaq/contracts.py`: independent standard-library implementation of these same envelopes.
+- `src/MultiNodeDAQ.Protocol`: working C# wire/IPC codecs and bounded prefix validation.
+- `src/MultiNodeDAQ.Recording`: working log header/record envelope codec; rotating writer, manifests, independent scanner and bounded range reader.
+- `python/multinodedaq/contracts.py`: independent standard-library implementation of these same envelopes.
 - `fixtures/manifest.json`: SHA-256 hashes, expected values and valid/invalid expectations.
-- `src/Elf.Core`: deterministic synthetic signals and the command state machine.
-- `src/Elf.Acquisition`: multiple TCP clients, bounded stream parsing, session state, continuity checks and command acknowledgments.
-- `src/Elf.Host` and `src/Elf.Simulator`: runnable console applications.
+- `src/MultiNodeDAQ.Core`: deterministic synthetic signals and the command state machine.
+- `src/MultiNodeDAQ.Acquisition`: multiple TCP clients, bounded stream parsing, session state, continuity checks and command acknowledgments.
+- `src/MultiNodeDAQ.Host` and `src/MultiNodeDAQ.Simulator`: runnable console applications.
 - Desktop and Python live IPC remain later stages.
 
 Encoders/decoders enforce binary layout, sample bounds and strict JSON syntax; Stage 1 handlers additionally enforce mandatory metadata schemas, state transitions and command acknowledgments. Cross-record commit semantics require the Stage 2 recorder. That separation is explicit: a syntactically valid object is not authorization to execute a command.
@@ -53,13 +53,13 @@ To intentionally revise fixtures, run `python scripts/generate_fixtures.py`, rev
 Open two PowerShell terminals in this directory after building. In the first:
 
 ```powershell
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Host -c Release --no-build -- --seconds 40 --summary host-summary.json
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Host -c Release --no-build -- --seconds 40 --summary host-summary.json
 ```
 
 In the second, promptly:
 
 ```powershell
-.\.tools\dotnet\dotnet.exe run --project src/Elf.Simulator -c Release --no-build -- --nodes 2 --seconds 30 --summary sim-summary.json
+.\.tools\dotnet\dotnet.exe run --project src/MultiNodeDAQ.Simulator -c Release --no-build -- --nodes 2 --seconds 30 --summary sim-summary.json
 ```
 
 The receiver automatically acknowledges HELLO, arms each unit and starts it. It prints a JSON health snapshot every second. `host-summary.json` contains diagnostics, **not recorded sample data**. The simulator summary reports generated, sent and discarded rows and buffer peaks. Both applications stop on Ctrl+C. Default binding is loopback; for another computer, explicitly bind the host to its LAN address and pass that address with simulator `--host`. No firewall changes are made automatically.
@@ -90,4 +90,4 @@ See [deployment and version control](../Deployment_and_Version_Control.md) for t
 
 ## Stage 2 recording
 
-The canonical repository is `C:\dev\ElfDaq`, outside OneDrive. Use host `--record NEW_DIRECTORY` to record, `--verify FILE_OR_DIRECTORY` to inspect, and `--replay DIRECTORY` to export a sample range. `--version` identifies the compiled Git revision. See [operation and commands](docs/stage2-operation.md) and [test status](docs/stage2-test-report.md).
+The canonical repository is `C:\dev\MultiNodeDAQ`, outside OneDrive. Use host `--record NEW_DIRECTORY` to record, `--verify FILE_OR_DIRECTORY` to inspect, and `--replay DIRECTORY` to export a sample range. `--version` identifies the compiled Git revision. See [operation and commands](docs/stage2-operation.md) and [test status](docs/stage2-test-report.md).
