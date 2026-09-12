@@ -6,6 +6,10 @@ MultiNodeDAQ is an early-stage C#/.NET project for collecting sample streams fro
 
 The first application is a distributed triaxial magnetic-field detector. The architecture is intended to support other sensor applications; the current sample protocol uses XYZ channels and has not yet been generalized to arbitrary channel layouts.
 
+## Resume development
+
+For the current Stage 5 hardware checkpoint and setup on another computer, start with [RESUME.md](RESUME.md). The Pico joins Wi-Fi; the first end-to-end streaming test is still pending.
+
 ## Current status
 
 Stages 0–3 are qualified with software simulators. The Stage 2 two-hour, sixteen-node recording run passed, including independent verification of all 144 segments: 2,879,978,240 XYZ rows with no missing samples or sample errors. See the [qualification report](software/docs/stage2-test-report.md). Stage 3 adds Python recording access, lossless HDF5 export, live SCF/PSD analysis, and runtime settings for the GUI. See [Python setup and operation](software/docs/stage3-operation.md). Stage 4 now provides the WPF operator GUI, replay controls, live diagnostics, selectable spectral settings and a self-contained Windows package with versioned per-user installation. Pico 2 W firmware remains Stage 5. Extended offline/field qualification remains Stage 6.
