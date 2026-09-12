@@ -19,3 +19,15 @@ Replay GUI currently offers waveforms, seeking/playback and CSV with metadata. F
 The closing dialog's background option is supported by independent process lifetime, verified by actual GUI process termination/restart. Orderly shutdown is verified through IPC and independent recording scanning.
 
 This does not replace Stage 6 eight-hour/endurance, clean-machine/offline, power-loss, RF, accessibility and operator field qualification. Packages are unsigned. No GPS synchronization, calibration, RSSI or battery measurement is fabricated.
+
+## Packaged build validation
+
+Source build: 96b332189b95fb12a88686228e7b25ce934d15bf, clean tree, version 0.4.0-stage4.
+
+- Windows x64 ZIP: package-96b3321.zip, 139,519,398 bytes.
+- SHA-256: 856BEE75162F119E15B1A1A9BC99FF81752366FCAABB11E6CE28CC9E9B709FAC.
+- Installer verified package hashes and copied files into a separate version directory using NoShortcut for this test.
+- Installed host reported the expected source identity. Installed desktop launched with DOTNET_ROOT pointing to a nonexistent directory, demonstrating use of the included runtime; it remained running until explicitly terminated by the smoke test.
+- Optional multinodedaq 0.4.0 Python wheel bundle was built from the same clean commit, installed into a fresh environment using --no-index and --require-hashes, and instantiated the default 6,875-row FAM worker successfully.
+
+Artifacts are local under software/.artifacts/stage4 and excluded from Git. This install/launch check used the development laptop, not a clean-machine qualification.

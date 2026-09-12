@@ -91,14 +91,14 @@ public partial class MainWindow : Window
                 else WaveHealth.Text="DISPLAY PAUSED · acquisition and recording continue. Resume to show current data.";
             }
             Footer.Text=$"{nodes.Length} acquisition sessions · GUI refresh 5 Hz maximum · "+(paused?"plots paused":"live monitoring");
-            
+
         }
         catch(Exception e)
         {
             if(stop.IsCancellationRequested)return;ConnectionStatus.Text="SERVICE UNAVAILABLE · "+e.Message;ConnectionStatus.Foreground=Brushes.Firebrick;RecordingStatus.Text="Recording state UNKNOWN · last connection lost";WaveHealth.Text="STALE · no current service data";AnalysisHealth.Text="Analysis unavailable · service connection lost";
             Fleet.ItemsSource=Fleet.Items.Cast<NodeView>().Select(n=>n with{States="Sampling / link / recording UNKNOWN",Color=Brushes.DarkGoldenrod}).ToArray();
             if(lastError!=e.Message){AddEvent(e.Message);lastError=e.Message;}
-            
+
         }
         finally{polling=false;}
     }
