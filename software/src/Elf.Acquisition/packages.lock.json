@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "elf.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elf.Protocol": "[1.0.0, )"
+        }
+      },
+      "elf.protocol": {
+        "type": "Project"
+      }
+    }
+  }
+}

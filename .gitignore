@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/__pycache__/
+.tools/
+.artifacts/
+.venv/
+recordings/
+*.user

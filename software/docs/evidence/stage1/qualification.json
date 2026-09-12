@@ -1,0 +1,58 @@
+{
+  "duration_seconds": 1800,
+  "scope": "loopback; receiver and simulator share one process",
+  "runs": [
+    {
+      "nodes": 2,
+      "rows": 89996288,
+      "payload_bytes": 809966592,
+      "memory": {
+        "managed_bytes": {
+          "first_third_median": 9222548.0,
+          "last_third_median": 9231936.0,
+          "growth": 9388.0,
+          "peak": 16925656,
+          "allowed_growth": 33554432
+        },
+        "working_set_bytes": {
+          "first_third_median": 62529536.0,
+          "last_third_median": 62517248.0,
+          "growth": -12288.0,
+          "peak": 63467520,
+          "allowed_growth": 67108864
+        }
+      },
+      "continuity_pass": true,
+      "bounds_pass": true,
+      "memory_growth_pass": true,
+      "pass": true
+    },
+    {
+      "nodes": 16,
+      "rows": 719974400,
+      "payload_bytes": 6479769600,
+      "memory": {
+        "managed_bytes": {
+          "first_third_median": 5336556.0,
+          "last_third_median": 12189244.0,
+          "growth": 6852688.0,
+          "peak": 21251192,
+          "allowed_growth": 33554432
+        },
+        "working_set_bytes": {
+          "first_third_median": 73465856.0,
+          "last_third_median": 73691136.0,
+          "growth": 225280.0,
+          "peak": 75677696,
+          "allowed_growth": 67108864
+        }
+      },
+      "continuity_pass": true,
+      "bounds_pass": true,
+      "memory_growth_pass": true,
+      "pass": true
+    }
+  ],
+  "pass": true,
+  "full_duration_gate": true
+}

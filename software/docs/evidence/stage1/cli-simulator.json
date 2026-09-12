@@ -1,0 +1,36 @@
+{
+  "units": [
+    {
+      "index": 0,
+      "unit": "53000000000000000000000001000000",
+      "session": "DFECA752DD164CE5916DBC7F17534D16",
+      "produced_rows": 184320,
+      "sent_rows": 184320,
+      "dropped_rows": 0,
+      "buffer_rows": 0,
+      "queued_bytes": 0,
+      "peak_bytes": 9616,
+      "buffer_limit": 1048576,
+      "reconnects": 0,
+      "reboots": 0,
+      "failures": 0,
+      "done": true
+    },
+    {
+      "index": 1,
+      "unit": "53000000000000000000000002000000",
+      "session": "D9CB898AFD504385AD2E2A14BB10D89E",
+      "produced_rows": 184320,
+      "sent_rows": 184320,
+      "dropped_rows": 0,
+      "buffer_rows": 0,
+      "queued_bytes": 0,
+      "peak_bytes": 9616,
+      "buffer_limit": 1048576,
+      "reconnects": 0,
+      "reboots": 0,
+      "failures": 0,
+      "done": true
+    }
+  ]
+}
