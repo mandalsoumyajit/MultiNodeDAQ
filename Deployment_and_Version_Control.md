@@ -1,7 +1,7 @@
 # Deployment, releases and version control
 
 Date: 12 September 2026  
-Status: agreed architecture extended with a proposed release process. The local repository is established at `C:\dev\ElfDaq`, with baseline commit `90e0b51`. Stage 2 includes compiled build identity and recording provenance. Portable deployment packaging and a remote Git host remain planned.
+Status: agreed architecture extended with a proposed release process. The local repository is established at `C:\dev\ElfDaq`, with baseline commit `90e0b51`. Stage 2 includes compiled build identity and recording provenance. The public MIT-licensed repository is [MultiNodeDAQ](https://github.com/mandalsoumyajit/MultiNodeDAQ). Portable deployment packaging remains planned.
 
 ## Recommended deployment
 
