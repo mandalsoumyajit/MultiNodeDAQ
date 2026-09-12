@@ -98,4 +98,12 @@ await using(var receiver=new Receiver(new(Port:0)))
     await stream.WriteAsync(Wire.Encode(wrong));await Task.Delay(100);
     Check(Json(receiver.Snapshot()).GetProperty("errors").GetInt64()>0,"mismatched config ACK accepted");
 }
-Console.WriteLine($"PASS: {checks} Stage 1 integration assertions.");
+// Stage 3 subscribers retain at most two seconds, independent of recorder queues.
+var hub=new LiveHub();var subscription=hub.Subscribe([Convert.ToHexString(fixture.Unit)]);
+for(ulong i=0;i<300;i++)hub.Publish(Synthetic.Data(fixture.Unit,fixture.Session,i,i*256,256,25000,2,"counter",17));
+var subscriptionState=Json(subscription.Snapshot());
+Check(subscriptionState.GetProperty("skipped_rows").GetInt64()>0,"slow analysis did not report skipped work");
+Check(subscriptionState.GetProperty("peak_bytes").GetInt64()<=LiveHub.Subscription.Limit,"analysis byte bound");
+long retainedRows=0;while(subscription.Take() is {} packet)retainedRows+=packet.Frame.Count;
+Check(retainedRows<=50000 && retainedRows>0,"analysis history bound");hub.Remove(subscription);
+Console.WriteLine($"PASS: {checks} integration assertions (Stages 1 and 3).");

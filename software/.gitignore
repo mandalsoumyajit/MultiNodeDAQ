@@ -4,3 +4,7 @@
 .tools/
 .artifacts/
 .venv/
+
+*.egg-info/
+build/
+dist/

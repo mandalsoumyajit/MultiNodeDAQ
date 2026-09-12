@@ -56,6 +56,7 @@ public sealed class Receiver : IAsyncDisposable
         Wire.Check(options.MaxConnections is >=1 and <=128 && options.MaxSessions>=options.MaxConnections && options.MaxSessions<=4096,"receiver limits");
         this.options=options;this.recording=recording;listener=new(IPAddress.Parse(options.Address),options.Port);slots=new(options.MaxConnections);
     }
+    public LiveHub Live { get; } = new();
     public int Port=>((IPEndPoint)listener.LocalEndpoint).Port;
     public void Start(){listener.Start(options.MaxConnections);accept=AcceptLoop();}
     private void Diagnostic(string text){lock(gate){diagnostics.Enqueue(text);while(diagnostics.Count>64)diagnostics.Dequeue();}}
@@ -101,7 +102,7 @@ public sealed class Receiver : IAsyncDisposable
                 // A continuing session reuses acknowledged configs; new sampling sessions cannot silently invent one.
                 connection=new(client,stats);active.Add(unit,connection);connections++;
             }
-            recording?.Accept(hello);
+            recording?.Accept(hello);Live.Publish(hello);
             bool supportsCommit=Metadata.Field(h,"capabilities").EnumerateArray().Any(x=>x.GetString()=="commit_through");ulong lastCommitSent=0;
             await SendFrame(connection,Metadata.Json(5,hello.Unit,hello.Session,0,0,new{request_id="0",ok=true,state=connection.Stats.State,effective_sample=connection.Stats.NextSample.ToString(),error=(string?)null,details=new{}}));
             if(options.AutoStart && connection.Stats.State=="idle")
@@ -159,7 +160,7 @@ public sealed class Receiver : IAsyncDisposable
                     else if(f.Kind==7){Diagnostic(unit+" reported GAP "+o.GetRawText());}
                     else throw new ContractException("unexpected node message");
                 }
-                recording?.Accept(f);
+                recording?.Accept(f);Live.Publish(f);
                 if(recording is not null && supportsCommit && !recording.Failed)
                 {
                     ulong durable=recording.Committed(unit,sid);
@@ -229,9 +230,9 @@ public sealed class Receiver : IAsyncDisposable
         catch{lock(gate)c.Pending.Remove(id);throw;}
         return id;
     }
-    public async Task<JsonElement> CommandAsync(string unit,string op,object args,CancellationToken token=default)
+    public async Task<JsonElement> CommandAsync(string unit,string op,object args,CancellationToken token=default,string? expectedSession=null)
     {
-        Connection c;lock(gate){Wire.Check(active.TryGetValue(unit.ToUpperInvariant(),out _),"unit offline");c=active[unit.ToUpperInvariant()];}
+        Connection c;lock(gate){Wire.Check(active.TryGetValue(unit.ToUpperInvariant(),out _),"unit offline");c=active[unit.ToUpperInvariant()];Wire.Check(expectedSession is null || c.Stats.Session.Equals(expectedSession,StringComparison.OrdinalIgnoreCase),"acquisition session changed");}
         var tcs=new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);ulong id=await Issue(c,op,args,tcs);
         try{return await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5),token);}finally{lock(gate)c.Pending.Remove(id);}
     }

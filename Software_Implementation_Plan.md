@@ -1,7 +1,7 @@
 # Staged software implementation plan
 
 Date: 12 September 2026  
-Status: **Stages 0–2 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stages 3-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
+Status: **Stages 0–3 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stage 3 adds independently tested Python access/export, paper-based FAM SCF analysis and GUI-ready settings; Stages 4-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
 Design basis: [Base-station software plan](Base_Station_Software_Plan.md) and [detector architecture](Architecture_and_Design_Options.md).
 
 ## 1. Scope and decisions
@@ -22,10 +22,10 @@ These update the earlier all-Python/PySide recommendation. WPF is Windows-specif
 
 ## 2. Proposed implementation layout
 
-Stage 0 created these project boundaries. Stage 1 implements the simulator, receiver and command state; recording, desktop and Python live components remain later-stage boundaries:
+Stage 0 created these project boundaries. Stage 1 implements the simulator, receiver and command state; Stages 2 and 3 now implement recording and Python live analysis; desktop remains a later-stage boundary:
 
 ```text
-Digital_Backend/software/
+MultiNodeDAQ/software/
     docs/                         protocol, recording, IPC and operator specifications
     src/MultiNodeDAQ.Protocol/             frames, validation, sample decoding; no UI dependency
     src/MultiNodeDAQ.Core/                 sessions, node registry, counters and quality models
@@ -45,7 +45,7 @@ Pin SDK/runtime and dependency versions with reproducible restore files. Provide
 
 ## 2a. Deployment and release work across stages
 
-Follow the [deployment and version-control plan](Deployment_and_Version_Control.md). Start with a release-foundation increment: establish a private Git repository, stamp build identity, publish self-contained Windows x64 host/simulator packages and verify a clean-machine demo. Stage 2 records version/configuration provenance and manages configuration schemas; Stage 3 packages optional Python; Stage 4 adds GUI installation and controlled upgrades; Stage 5 stamps firmware; Stage 6 qualifies the exact offline release and rollback process. Operators install immutable releases rather than maintaining development checkouts. Packaging work is planned, not part of the completed Stage 1 acceptance claim.
+Follow the [deployment and version-control plan](Deployment_and_Version_Control.md). Start with a release-foundation increment: maintain the public MIT-licensed GitHub repository, stamp build identity, publish self-contained Windows x64 host/simulator packages and verify a clean-machine demo. Stage 2 records version/configuration provenance and manages configuration schemas; Stage 3 packages optional Python; Stage 4 adds GUI installation and controlled upgrades; Stage 5 stamps firmware; Stage 6 qualifies the exact offline release and rollback process. Operators install immutable releases rather than maintaining development checkouts. Packaging work is planned, not part of the completed Stage 1 acceptance claim.
 
 ## 3. Stage overview
 
@@ -53,8 +53,8 @@ Follow the [deployment and version-control plan](Deployment_and_Version_Control.
 |---|---|---|---|
 | 0 (complete) | Contracts, test vectors, solution skeleton | None | Laptop |
 | 1 (complete) | Simulator and multi-unit receiver | 0 | Laptop |
-| 2 | Durable recording, verification and replay reader | 1 | Laptop + local SSD |
-| 3 | Python client/worker and export | 2 | Laptop |
+| 2 (complete) | Durable recording, verification and replay reader | 1 | Laptop + local SSD |
+| 3 (complete) | Python client/worker and export | 2 | Laptop |
 | 4 | Operator GUI and live diagnostics | 2; spectra require 3 | Laptop |
 | 5 | Two Pico synthetic-streaming prototype | Stable 0; end-to-end test uses 2-4 | Two Pico 2 W boards, AP, USB packs |
 | 6 | Load/failure qualification and field package | 2-5 | Target laptop and boards |
@@ -108,6 +108,8 @@ Advance durable acknowledgments only after the chosen disk flush completes. Pers
 Proposed sizing: sixteen int32 streams = 4.8 MB/s; ten seconds of pending payload = 48 MB. Set a 64 MiB recorder payload budget with explicit per-node quotas and separate limits for parser/subscriber buffers. Track actual total process memory as well as payload accounting.
 
 ## 7. Stage 3: Python interface and reproducible analysis
+
+Completed. See [operation](software/docs/stage3-operation.md), [SCF estimator and manuscript interpretation](software/docs/spectral-method.md), and [test report](software/docs/stage3-test-report.md). Runtime FAM settings are exposed through IPC for Stage 4 GUI controls; every result identifies its applied settings revision.
 
 **Deliverables**
 

@@ -1,5 +1,20 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "multinodedaq"
-version = "0.1.0"
+version = "0.3.0"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.15"
 dependencies = []
+
+[project.optional-dependencies]
+analysis = ["numpy==2.2.6", "scipy==1.15.3", "h5py==3.14.0"]
+
+[project.scripts]
+multinodedaq-analysis = "multinodedaq.worker:main"
+
+[tool.setuptools.packages.find]
+include = ["multinodedaq*"]

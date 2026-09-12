@@ -1,15 +1,16 @@
-# MultiNodeDAQ software: Stages 0–2
+# MultiNodeDAQ software: Stages 0–3
 
-C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. The GUI, Python live analysis and Pico firmware remain later stages.
+C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. Stage 3 adds live Python SCF analysis and HDF5 export; GUI and Pico firmware remain later stages.
 
 ## Quick verification (Windows x64)
 
-Install/pin .NET SDK 10.0.401 or run `scripts/bootstrap-dotnet.ps1` to obtain the official checksum-verified SDK under ignored `.tools/`. This does not replace the system SDK. Python 3.11-3.14 is supported; Stage 0 has no third-party Python dependencies.
+Install/pin .NET SDK 10.0.401 or run `scripts/bootstrap-dotnet.ps1` to obtain the official checksum-verified SDK under ignored `.tools/`. This does not replace the system SDK. Use Python 3.12 and `scripts/setup-stage3.ps1` for the pinned analysis suite. Stage 0 contract-only tests need no third-party Python dependencies.
 
 From this directory:
 
 ```powershell
-.\scripts\test.ps1 -Python 'C:\path\to\python.exe'
+.\scripts\setup-stage3.ps1 -Python 'C:\path\to\python.exe'
+.\scripts\test.ps1
 ```
 
 The script uses `.tools/dotnet/dotnet.exe` if present, otherwise `dotnet` on PATH (or pass `-Dotnet`). It performs locked restore, Release build, independent C# fixture checks, real-socket Stage 1 integration tests, Stage 2 recording/recovery tests, and Python unittest discovery. All NuGet sources are disabled because Stage 0 requires no third-party packages; project lock files are included. WPF requires the Windows desktop targeting pack included in the Windows SDK distribution. The desktop project is currently a class-library boundary, not a runnable UI.
@@ -40,7 +41,7 @@ The C# test project is a dependency-free executable harness, not an xUnit/MSTest
 - `src/MultiNodeDAQ.Core`: deterministic synthetic signals and the command state machine.
 - `src/MultiNodeDAQ.Acquisition`: multiple TCP clients, bounded stream parsing, session state, continuity checks and command acknowledgments.
 - `src/MultiNodeDAQ.Host` and `src/MultiNodeDAQ.Simulator`: runnable console applications.
-- Desktop and Python live IPC remain later stages.
+- Desktop remains a later stage; [Python live IPC and analysis](docs/stage3-operation.md) are available.
 
 Encoders/decoders enforce binary layout, sample bounds and strict JSON syntax; Stage 1 handlers additionally enforce mandatory metadata schemas, state transitions and command acknowledgments. Cross-record commit semantics require the Stage 2 recorder. That separation is explicit: a syntactically valid object is not authorization to execute a command.
 
@@ -91,3 +92,7 @@ See [deployment and version control](../Deployment_and_Version_Control.md) for t
 ## Stage 2 recording
 
 The canonical repository is `C:\dev\MultiNodeDAQ`, outside OneDrive. Use host `--record NEW_DIRECTORY` to record, `--verify FILE_OR_DIRECTORY` to inspect, and `--replay DIRECTORY` to export a sample range. `--version` identifies the compiled Git revision. See [operation and commands](docs/stage2-operation.md) and [test status](docs/stage2-test-report.md).
+
+## Stage 3 analysis
+
+See the [operation guide](docs/stage3-operation.md), [paper-based FAM method](docs/spectral-method.md), [offline notebook](python/notebooks/offline_scf.ipynb), and [qualification report](docs/stage3-test-report.md).

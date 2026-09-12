@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "nodes": 2,
+  "seconds": 24,
+  "rows": 1196032,
+  "worker_kills": 2,
+  "stalled_subscribers": 1,
+  "recording_errors": 0,
+  "independent_sample_match": true
+}

@@ -1,0 +1,26 @@
+{
+  "settings": {
+    "rate": 25000,
+    "df": 10,
+    "dalpha": 5,
+    "max_frequency": 5000,
+    "max_alpha": 1000,
+    "hop_fraction": 0.25,
+    "pair_batch": 256
+  },
+  "plan_seconds": 0.022038399998564273,
+  "rows": 6875,
+  "axes": 3,
+  "pairs": 50551,
+  "grid": [
+    1001,
+    201,
+    3
+  ],
+  "repeats": 20,
+  "median_seconds": 0.03576410001551267,
+  "max_seconds": 0.03764009999576956,
+  "window_seconds": 0.275,
+  "scf_bytes": 9657648,
+  "valid_grid_bytes": 201201
+}

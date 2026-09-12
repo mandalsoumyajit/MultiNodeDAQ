@@ -1,6 +1,7 @@
-param([string]$Python = "python", [string]$Dotnet = "")
+param([string]$Python = "", [string]$Dotnet = "")
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path $PSScriptRoot -Parent
+if (-not $Python) { $taskPython = Join-Path $taskRoot '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $taskPython) { $Python = $taskPython } else { $Python = 'python' } }
 if (-not $Dotnet) {
     $taskLocalSdk = Join-Path $taskRoot '.tools/dotnet/dotnet.exe'
     if (Test-Path -LiteralPath $taskLocalSdk) { $Dotnet = $taskLocalSdk } else { $Dotnet = 'dotnet' }

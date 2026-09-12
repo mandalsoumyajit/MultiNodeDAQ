@@ -1,6 +1,6 @@
 # Laptop IPC v1
 
-Use separate loopback TCP connections for control/status and bulk analysis subscriptions. Default development endpoint 127.0.0.1:45101, configurable; IPv6 may be added explicitly. Sensor listener is separate. Stage 0 implements envelopes only; no sockets or process supervision yet.
+Use separate loopback TCP connections for control/status and bulk analysis subscriptions. Default development endpoint 127.0.0.1:45101, configurable; IPv6 may be added explicitly. Sensor listener is separate. Stage 3 implements authenticated sockets, selected-unit subscriptions, worker results and analysis settings. See [operation and implemented subset](stage3-operation.md).
 
 ## Envelope
 
@@ -40,3 +40,9 @@ Implement only stage-appropriate operations; unsupported returns an explicit err
 RESULT requires `result` string, `unit` and `acquisition_session` UUID hex, `first_sample` decimal u64 string, `count` u32, `valid` bool, `algorithm` versioned string, `parameters` object, `values` object. Spectra add frequency-bin definition, units, window/averaging and timing/calibration IDs. Arrays in RESULT JSON are bounded reduced results, not raw sample transport. Sample/timing IDs identify coverage even if plot delivery is delayed. Invalid windows return validity/reason instead of misleading numerical output. A subscription/status event names skipped samples/windows explicitly.
 
 Python failure or slow consumption cannot block acquisition, recording or basic C# health checks. A bounded recent-history subscription may evict old work and must report that fact. Recorder shutdown does not depend on Python. A future shared-memory transport can use a new capability while retaining message semantics; it is not part of v1.
+
+## Stage 3 settings extension
+
+CONTROL `analysis_settings` returns `details` containing `revision` and a settings object (null until configured). CONTROL `configure_analysis` takes `args.settings` with all fields: `rate`, `df`, `dalpha`, `max_frequency`, `max_alpha`, `hop_fraction`, and integer `pair_batch`. Successful reply reports the requested revision; application remains asynchronous. Worker RESULT `parameters.revision` and actual resolutions identify the applied plan. Rejected plans generate an invalid RESULT naming `values.rejected_revision`; the previous plan continues. A client should compare desired and applied revisions and result age. Settings currently apply globally.
+
+Subscription CONTROL events have correlation zero: `subscription_status.details` contains queue bounds and cumulative skipped rows; `context` carries unit/session and Base64 metadata frames (not sample arrays), followed by a binary BLOCK. Stream sockets are dedicated and unsubscribed by closing them. Status and result traffic use a separate authenticated connection. Nonzero control IDs must increase monotonically on each connection. Responses carry operation-specific data in `details`.
