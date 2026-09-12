@@ -10,6 +10,12 @@
       },
       "elf.protocol": {
         "type": "Project"
+      },
+      "elf.recording": {
+        "type": "Project",
+        "dependencies": {
+          "Elf.Protocol": "[1.0.0, )"
+        }
       }
     }
   }

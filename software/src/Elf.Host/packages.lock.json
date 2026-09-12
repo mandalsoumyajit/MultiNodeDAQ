@@ -6,7 +6,8 @@
         "type": "Project",
         "dependencies": {
           "Elf.Core": "[1.0.0, )",
-          "Elf.Protocol": "[1.0.0, )"
+          "Elf.Protocol": "[1.0.0, )",
+          "Elf.Recording": "[1.0.0, )"
         }
       },
       "elf.core": {
@@ -17,6 +18,12 @@
       },
       "elf.protocol": {
         "type": "Project"
+      },
+      "elf.recording": {
+        "type": "Project",
+        "dependencies": {
+          "Elf.Protocol": "[1.0.0, )"
+        }
       }
     }
   }

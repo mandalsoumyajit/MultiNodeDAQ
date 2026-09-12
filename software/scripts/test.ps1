@@ -15,6 +15,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'C# tests failed' }
     & $Dotnet run --project tests/Elf.Integration.Tests -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Stage 1 integration tests failed' }
+    & $Dotnet run --project tests/Elf.Recording.Tests -c Release --no-build
+    if ($LASTEXITCODE -ne 0) { throw "Stage 2 recording tests failed" }
     & $Python -m unittest discover -s python/tests -v
     if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }
 } finally { Pop-Location }

@@ -1,7 +1,7 @@
 # Staged software implementation plan
 
 Date: 12 September 2026  
-Status: **Stages 0 and 1 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stages 2-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).  
+Status: **Stages 0 and 1 completed on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 implementation is available and undergoing its two-hour recording gate; Stages 3-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
 Design basis: [Base-station software plan](Base_Station_Software_Plan.md) and [detector architecture](Architecture_and_Design_Options.md).
 
 ## 1. Scope and decisions
@@ -90,6 +90,8 @@ Pace simulation from an independent elapsed-time/sample schedule. Do not redefin
 **Gate:** two clients for 30 minutes at nominal rate, then sixteen for 30 minutes; expected sequences and generated values match. Fragment/coalesce TCP writes deliberately. Disconnect/reboot one client, inject invalid frames, and verify other streams continue. Buffer capacity is bounded in bytes and no continuing memory growth remains after warm-up. This validates laptop software, not RF scaling.
 
 ## 6. Stage 2: recorder, scanner and replay reader
+
+Implementation is available in `C:\dev\ElfDaq`. Short regression and sixteen-node smoke tests pass; full-duration qualification is pending. See [operation](software/docs/stage2-operation.md) and [test status](software/docs/stage2-test-report.md).
 
 **Deliverables**
 

@@ -1,6 +1,6 @@
-# ELF DAQ software: Stages 0–1
+# ELF DAQ software: Stages 0–2
 
-C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver**. Durable recording, the desktop GUI, Python live analysis and Pico firmware remain later stages.
+C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification is tracked in the test report. The GUI, Python live analysis and Pico firmware remain later stages.
 
 ## Quick verification (Windows x64)
 
@@ -34,13 +34,13 @@ The C# test project is a dependency-free executable harness, not an xUnit/MSTest
 - [Acquisition log v1](docs/elflog-v1.md): header/record envelopes, normalized int32 data, commit/close/recovery rules.
 - [Local IPC v1](docs/ipc-v1.md): C#/Python control, binary blocks and result metadata.
 - `src/Elf.Protocol`: working C# wire/IPC codecs and bounded prefix validation.
-- `src/Elf.Recording`: working log header/record envelope codec; no file writer yet.
+- `src/Elf.Recording`: working log header/record envelope codec; rotating writer, manifests, independent scanner and bounded range reader.
 - `python/elfdaq/contracts.py`: independent standard-library implementation of these same envelopes.
 - `fixtures/manifest.json`: SHA-256 hashes, expected values and valid/invalid expectations.
 - `src/Elf.Core`: deterministic synthetic signals and the command state machine.
 - `src/Elf.Acquisition`: multiple TCP clients, bounded stream parsing, session state, continuity checks and command acknowledgments.
 - `src/Elf.Host` and `src/Elf.Simulator`: runnable console applications.
-- Desktop, durable recording and Python live IPC remain later stages.
+- Desktop and Python live IPC remain later stages.
 
 Encoders/decoders enforce binary layout, sample bounds and strict JSON syntax; Stage 1 handlers additionally enforce mandatory metadata schemas, state transitions and command acknowledgments. Cross-record commit semantics require the Stage 2 recorder. That separation is explicit: a syntactically valid object is not authorization to execute a command.
 
@@ -82,8 +82,12 @@ Add host `--interactive` for `status UNIT`, `stop UNIT`, `arm UNIT [CONFIG RATE 
 
 This runs two nodes for 30 minutes, then sixteen for 30 minutes, using actual loopback TCP sockets. Exact counter values and row counts are checked; one-second memory/queue telemetry and JSON summaries are saved under `.artifacts/stage1/`. The Python script checks bounded queues and compares memory medians after warm-up. `-Seconds 60` is a smoke run and does not satisfy the full-duration gate.
 
-See [Stage 1 design and operation](docs/stage1-operation.md), [Stage 1 test report](docs/stage1-test-report.md), [Stage 0 report](docs/stage0-test-report.md), and [staged plan](../Software_Implementation_Plan.md). Stage 2 adds durable recording and replay. These loopback tests do not qualify Wi-Fi range, real Pico timing or GPS-denied synchronization.
+See [Stage 1 design and operation](docs/stage1-operation.md), [Stage 1 test report](docs/stage1-test-report.md), [Stage 0 report](docs/stage0-test-report.md), and [staged plan](../Software_Implementation_Plan.md). See [Stage 2 recording and replay](docs/stage2-operation.md). These loopback tests do not qualify Wi-Fi range, real Pico timing or GPS-denied synchronization.
 
 ## Deployment and releases
 
 See [deployment and version control](../Deployment_and_Version_Control.md) for the proposed self-contained Windows package, Git/release workflow, optional Python bundle, recording provenance and upgrade/rollback policy. Packaging begins in the next release-foundation increment; Stage 1 source tests do not yet establish portable deployment.
+
+## Stage 2 recording
+
+The canonical repository is `C:\dev\ElfDaq`, outside OneDrive. Use host `--record NEW_DIRECTORY` to record, `--verify FILE_OR_DIRECTORY` to inspect, and `--replay DIRECTORY` to export a sample range. `--version` identifies the compiled Git revision. See [operation and commands](docs/stage2-operation.md) and [test status](docs/stage2-test-report.md).

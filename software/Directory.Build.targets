@@ -1,0 +1,16 @@
+<Project>
+  <Target Name="ElfBuildIdentity" BeforeTargets="GetAssemblyVersion">
+    <Exec Command="git rev-parse --verify HEAD" WorkingDirectory="$(MSBuildThisFileDirectory).." ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="ElfCommit" />
+    </Exec>
+    <Exec Command="git status --porcelain --untracked-files=normal" WorkingDirectory="$(MSBuildThisFileDirectory).." ConsoleToMSBuild="true" StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="ElfDirty" />
+    </Exec>
+    <PropertyGroup>
+      <Version>0.2.0-stage2</Version>
+      <InformationalVersion>$(Version)+$(ElfCommit)</InformationalVersion>
+      <InformationalVersion Condition="'$(ElfDirty)' != ''">$(InformationalVersion).dirty</InformationalVersion>
+      <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

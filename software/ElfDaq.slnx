@@ -8,4 +8,5 @@
   <Project Path="src/Elf.Simulator/Elf.Simulator.csproj" />
   <Project Path="tests/Elf.Contracts.Tests/Elf.Contracts.Tests.csproj" />
   <Project Path="tests/Elf.Integration.Tests/Elf.Integration.Tests.csproj" />
+  <Project Path="tests/Elf.Recording.Tests/Elf.Recording.Tests.csproj" />
 </Solution>

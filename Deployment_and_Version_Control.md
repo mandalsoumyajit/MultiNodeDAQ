@@ -1,7 +1,7 @@
 # Deployment, releases and version control
 
 Date: 12 September 2026  
-Status: agreed architecture extended with a proposed release process. Stage 1 is complete; deployment packaging and the Git repository described here have not yet been established.
+Status: agreed architecture extended with a proposed release process. The local repository is established at `C:\dev\ElfDaq`, with baseline commit `90e0b51`. Stage 2 includes compiled build identity and recording provenance. Portable deployment packaging and a remote Git host remain planned.
 
 ## Recommended deployment
 
@@ -15,9 +15,9 @@ The current Stage 1 build output is a developer build, not yet a qualified porta
 
 ## Source control and collaboration
 
-The workspace currently reports `fatal: not a git repository`. Saved source and OneDrive history do not establish a Git revision or release history. First establish a dedicated private software repository containing the C# solution, Python package, Pico firmware, contracts, small fixtures, release scripts and documentation. Keep development clones outside actively synchronized OneDrive folders. Investigate/preserve any existing `.git` metadata before moving or replacing anything; this plan does not modify it.
+The original OneDrive workspace was not a functioning Git repository. A dedicated local repository now exists at `C:\dev\ElfDaq`, containing the C# solution, Python package, Pico firmware, contracts, small fixtures, release scripts and documentation. Keep development clones outside actively synchronized OneDrive folders. Investigate/preserve any existing `.git` metadata before moving or replacing anything; this plan does not modify it.
 
-Use an institution-supported private Git host. Developers clone the repository, work on short-lived branches, run checks and merge reviewed changes into `main`. Each machine has its own clone. Operators receive release packages rather than editing installed code or pulling a development branch. Source location/remote selection is still to be decided; no remote has been created or contacted for publication.
+Use an institution-supported private Git host. Developers clone the repository, work on short-lived branches, run checks and merge reviewed changes into `main`. Each machine has its own clone. Operators receive release packages rather than editing installed code or pulling a development branch. The local source location is established; the remote host remains to be selected. No remote has been created or contacted for publication.
 
 Track source, build settings, dependency locks, default configuration templates and small test evidence. Exclude SDKs, virtual environments, credentials, local configuration, build output and experimental recordings. Store large recordings separately, with checksums and session identifiers. Keep releases in the Git host's release/artifact storage with retention configured for long-term scientific reproducibility; do not depend solely on expiring CI logs.
 

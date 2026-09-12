@@ -127,7 +127,7 @@ public sealed class SimNode
                     {
                         await send.WaitAsync(lifetime.Token);try{Frame f;lock(gate){Wire.Check(session==connectedSession,"reboot");f=Json(kind,body);}await stream.WriteAsync(Wire.Encode(f),lifetime.Token);}finally{send.Release();}
                     }
-                    object hello;lock(gate)hello=new{firmware="elf-simulator/1",protocol=1,synthetic=true,axes=new[]{"X","Y","Z"},encodings=new[]{1,2},capabilities=new[]{"status","arm","start","stop","recover"},label=$"sim-{index+1:00}",mode=scenario.Mode,seed=scenario.Seed,preferred_encoding=scenario.Encoding,state=model.State,next_sample=next.ToString()};
+                    object hello;lock(gate)hello=new{firmware="elf-simulator/1",software_build=System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(SimNode).Assembly)?.InformationalVersion,protocol=1,synthetic=true,axes=new[]{"X","Y","Z"},encodings=new[]{1,2},capabilities=new[]{"status","arm","start","stop","recover"},label=$"sim-{index+1:00}",mode=scenario.Mode,seed=scenario.Seed,preferred_encoding=scenario.Encoding,state=model.State,next_sample=next.ToString()};
                     await SendOne(1,hello);
                     using(var handshake=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
                     {handshake.CancelAfter(TimeSpan.FromSeconds(5));var ack=await parser.ReadAsync(stream,handshake.Token);Wire.Check(ack?.Kind==5,"HELLO ACK");var a=Metadata.Read(ack!);Wire.Check(Metadata.Bool(a,"ok")&&Metadata.Counter(a,"request_id")==0,"HELLO refused");}

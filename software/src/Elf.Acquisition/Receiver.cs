@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elf.Protocol;
+using Elf.Recording;
 namespace Elf.Acquisition;
 
 public sealed record ReceiverOptions(string Address="127.0.0.1",int Port=45100,int MaxConnections=32,int MaxSessions=128,bool AutoStart=true,bool VerifyCounter=true,int FrameTimeoutSeconds=15);
@@ -19,9 +20,10 @@ public sealed class SessionStats
     public uint Seed {get;set;}
     public ulong Frames,Rows,Bytes,NextSample,Missing,Recovered,Duplicates,Conflicts,ReportedDrops,SequenceGaps,SampleErrors;
     public int Reconnects,ParserCapacity;
-    public long LastDataTicks,FirstDataTicks;
+    public long LastDataTicks,FirstDataTicks,DrainedTicks;
     public uint BufferRows;
     internal ulong LastSequence,HostSequence,Request;
+    internal long TimingBytes;
     internal readonly Dictionary<uint,(uint Rate,ushort Encoding)> Configs=[];
     internal readonly Dictionary<uint,string> Timings=[];
     internal readonly Dictionary<ulong,(ulong End,byte[] Hash)> Recent=[];
@@ -31,6 +33,7 @@ public sealed class SessionStats
 public sealed class Receiver : IAsyncDisposable
 {
     private readonly ReceiverOptions options;
+    private readonly RecordingSession? recording;
     private readonly TcpListener listener;
     private readonly CancellationTokenSource stop=new();
     private readonly object gate=new();
@@ -48,10 +51,10 @@ public sealed class Receiver : IAsyncDisposable
         public TcpClient Client=client;public SessionStats Stats=stats;public readonly SemaphoreSlim Write=new(1,1);
         public readonly Dictionary<ulong,Pending> Pending=[];
     }
-    public Receiver(ReceiverOptions options)
+    public Receiver(ReceiverOptions options, RecordingSession? recording=null)
     {
         Wire.Check(options.MaxConnections is >=1 and <=128 && options.MaxSessions>=options.MaxConnections && options.MaxSessions<=4096,"receiver limits");
-        this.options=options;listener=new(IPAddress.Parse(options.Address),options.Port);slots=new(options.MaxConnections);
+        this.options=options;this.recording=recording;listener=new(IPAddress.Parse(options.Address),options.Port);slots=new(options.MaxConnections);
     }
     public int Port=>((IPEndPoint)listener.LocalEndpoint).Port;
     public void Start(){listener.Start(options.MaxConnections);accept=AcceptLoop();}
@@ -98,6 +101,8 @@ public sealed class Receiver : IAsyncDisposable
                 // A continuing session reuses acknowledged configs; new sampling sessions cannot silently invent one.
                 connection=new(client,stats);active.Add(unit,connection);connections++;
             }
+            recording?.Accept(hello);
+            bool supportsCommit=Metadata.Field(h,"capabilities").EnumerateArray().Any(x=>x.GetString()=="commit_through");ulong lastCommitSent=0;
             await SendFrame(connection,Metadata.Json(5,hello.Unit,hello.Session,0,0,new{request_id="0",ok=true,state=connection.Stats.State,effective_sample=connection.Stats.NextSample.ToString(),error=(string?)null,details=new{}}));
             if(options.AutoStart && connection.Stats.State=="idle")
             {
@@ -145,13 +150,20 @@ public sealed class Receiver : IAsyncDisposable
                             var s=connection.Stats;s.State=Metadata.State(o);s.ReportedDrops=Metadata.Counter(o,"dropped_rows");s.BufferRows=Metadata.Number(o,"buffer_rows");
                             // A drained idle source declares a terminal watermark, including a lost tail.
                             ulong next=Metadata.Counter(o,"next_sample");
+                            if(s.State=="idle" && s.BufferRows==0)s.DrainedTicks=Stopwatch.GetTimestamp();
                             if(s.State=="idle" && s.BufferRows==0 && next>s.NextSample)
                             {Wire.Check(s.Holes.Count<1024,"gap index capacity");s.Holes.Add((s.NextSample,next));s.Missing+=next-s.NextSample;s.NextSample=next;}
                         }
                     }
-                    else if(f.Kind==6){lock(gate){var t=connection.Stats.Timings;Wire.Check(t.Count<64 || t.ContainsKey(f.Timing),"timing capacity");string raw=o.GetRawText();Wire.Check(!t.TryGetValue(f.Timing,out var prior)||prior==raw,"timing mutation");t[f.Timing]=raw;}}
+                    else if(f.Kind==6){lock(gate){var t=connection.Stats.Timings;Wire.Check(t.Count<64 || t.ContainsKey(f.Timing),"timing capacity");string raw=o.GetRawText();Wire.Check(!t.TryGetValue(f.Timing,out var prior)||prior==raw,"timing mutation");if(!t.ContainsKey(f.Timing)){Wire.Check(connection.Stats.TimingBytes+f.Payload.Length<=1_048_576,"timing byte capacity");connection.Stats.TimingBytes+=f.Payload.Length;}t[f.Timing]=raw;}}
                     else if(f.Kind==7){Diagnostic(unit+" reported GAP "+o.GetRawText());}
                     else throw new ContractException("unexpected node message");
+                }
+                recording?.Accept(f);
+                if(recording is not null && supportsCommit && !recording.Failed)
+                {
+                    ulong durable=recording.Committed(unit,sid);
+                    if(durable>lastCommitSent){await Issue(connection,"commit_through",new{next_sample=durable.ToString()},null);lastCommitSent=durable;}
                 }
             }
         }
@@ -162,6 +174,7 @@ public sealed class Receiver : IAsyncDisposable
             if(connection is not null)lock(gate)
             {
                 active.Remove(connection.Stats.Unit);connection.Stats.Connected=false;
+                recording?.Event(connection.Stats.Unit,connection.Stats.Session,"node_disconnected",new{drained=connection.Stats.DrainedTicks>0,observed_next=connection.Stats.NextSample.ToString()});
                 foreach(var pending in connection.Pending.Values)pending.Completion?.TrySetException(new IOException("node disconnected"));connection.Pending.Clear();
             }
         }
@@ -189,6 +202,7 @@ public sealed class Receiver : IAsyncDisposable
             if(f.FirstSample<s.NextSample)
             {
                 int hole=s.Holes.FindIndex(x=>x.Start<=f.FirstSample && x.End>=end);
+                if(hole<0 && recording is not null)return; // The recorder checks historical fingerprints on disk.
                 Wire.Check(hole>=0,"unverifiable old or overlapping range");var range=s.Holes[hole];s.Holes.RemoveAt(hole);
                 if(range.Start<f.FirstSample)s.Holes.Add((range.Start,f.FirstSample));if(end<range.End)s.Holes.Add((end,range.End));
                 s.Recovered+=f.Count;s.Missing-=f.Count;
@@ -206,7 +220,7 @@ public sealed class Receiver : IAsyncDisposable
     private async Task SendFrame(Connection c,Frame f)
     {
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);timeout.CancelAfter(TimeSpan.FromSeconds(5));
-        await c.Write.WaitAsync(timeout.Token);try{await c.Client.GetStream().WriteAsync(Wire.Encode(f with{Sequence=NextHost(c)}),timeout.Token);}finally{c.Write.Release();}
+        await c.Write.WaitAsync(timeout.Token);try{var sent=f with{Sequence=NextHost(c)};recording?.Accept(sent);await c.Client.GetStream().WriteAsync(Wire.Encode(sent),timeout.Token);}finally{c.Write.Release();}
     }
     private async Task<ulong> Issue(Connection c,string op,object args,TaskCompletionSource<JsonElement>? completion)
     {
@@ -238,6 +252,22 @@ public sealed class Receiver : IAsyncDisposable
                 parser_capacity=s.ParserCapacity,recent_hashes=s.Recent.Count,gap_intervals=s.Holes.Count,pending_commands=active.TryGetValue(s.Unit,out var c)?c.Pending.Count:0
             }).ToArray(),memory=new{managed_bytes=GC.GetTotalMemory(false),working_set_bytes=Environment.WorkingSet}
         };
+    }
+    public async Task<bool> StopSourcesAsync(TimeSpan? timeout=null)
+    {
+        long requested=Stopwatch.GetTimestamp();Connection[] targets;lock(gate)targets=active.Values.ToArray();
+        TimeSpan budget=timeout??TimeSpan.FromSeconds(10);using var deadline=new CancellationTokenSource(budget);
+        var results=await Task.WhenAll(targets.Select(async c=>
+        {
+            try{var ack=await CommandAsync(c.Stats.Unit,"stop",new{},deadline.Token);return Metadata.Bool(ack,"ok");}
+            catch(Exception e) when(e is IOException or ContractException or OperationCanceledException or TimeoutException){return false;}
+        }));
+        while(!deadline.IsCancellationRequested)
+        {
+            lock(gate)if(targets.All(c=>c.Stats.DrainedTicks>=requested))break;
+            try{await Task.Delay(25,deadline.Token);}catch(OperationCanceledException){break;}
+        }
+        lock(gate)return results.All(x=>x) && sessions.Values.All(s=>s.Frames==0 || (s.State=="idle" && s.DrainedTicks>0)) && targets.All(c=>c.Stats.DrainedTicks>=requested);
     }
     public async ValueTask DisposeAsync()
     {
