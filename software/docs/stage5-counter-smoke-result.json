@@ -1,0 +1,20 @@
+{
+  "report.json": {
+    "rows": 1514496,
+    "observed_rows_per_second": 25006.933333333334,
+    "missing_rows": 0,
+    "sample_errors": 0,
+    "reported_drops": 0,
+    "verify_exit": 0,
+    "recording_state": "complete"
+  },
+  "python-verify.json": {
+    "independent_python_verification": "pass",
+    "rows": 1514496,
+    "missing_rows": 0,
+    "counter_errors": 0,
+    "lossless": true,
+    "manifest_state": "complete"
+  },
+  "uf2_sha256": "AE990C3564EEAE071BBE65E55B0C89F03F570C04CA77B2CCEAF61C105615EF03"
+}

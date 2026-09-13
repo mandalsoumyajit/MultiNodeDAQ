@@ -98,6 +98,36 @@ await using(var receiver=new Receiver(new(Port:0)))
     await stream.WriteAsync(Wire.Encode(wrong));await Task.Delay(100);
     Check(Json(receiver.Snapshot()).GetProperty("errors").GetInt64()>0,"mismatched config ACK accepted");
 }
+// Outbound acquisition retries unavailable nodes, reuses HELLO handling and reconnects.
+{
+    var node=new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback,0);node.Start();
+    int port=((System.Net.IPEndPoint)node.LocalEndpoint).Port;node.Stop();
+    node=new(System.Net.IPAddress.Loopback,port);
+    var receiver=new Receiver(new(Port:port,AutoStart:false,ConnectAddresses:["127.0.0.1"]));
+    receiver.Start();
+    try
+    {
+        await Task.Delay(150);node.Start();
+        using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        for(int attempt=0;attempt<2;attempt++)
+        {
+            using var client=await node.AcceptTcpClientAsync(deadline.Token);
+            using var parser=new FrameStream();
+            await client.GetStream().WriteAsync(Wire.Encode(fixture with{Sequence=fixture.Sequence+(ulong)attempt}),deadline.Token);
+            var welcome=await parser.ReadAsync(client.GetStream(),deadline.Token);
+            Check(welcome?.Kind==5,"outbound HELLO welcome");
+        }
+        var snapshot=Json(receiver.Snapshot());
+        Check(snapshot.GetProperty("connections").GetInt64()==2,"outbound reconnect count");
+        Check(snapshot.GetProperty("units")[0].GetProperty("reconnects").GetInt32()==1,"outbound session reused");
+        Check(snapshot.GetProperty("errors").GetInt64()==0,"outbound retry corrupted protocol state");
+    }
+    finally
+    {
+        await receiver.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3));node.Stop();
+    }
+    checks++;
+}
 // Stage 3 subscribers retain at most two seconds, independent of recorder queues.
 var hub=new LiveHub();var subscription=hub.Subscribe([Convert.ToHexString(fixture.Unit)]);
 for(ulong i=0;i<300;i++)hub.Publish(Synthetic.Data(fixture.Unit,fixture.Session,i,i*256,256,25000,2,"counter",17));

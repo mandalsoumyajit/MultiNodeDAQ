@@ -1,3 +1,12 @@
+# Latest result
+
+The first one-board lossless Wi-Fi smoke test passed on the replacement computer
+using computer-initiated TCP. See [the tested checkpoint](stage5-replacement-computer.md)
+for the result, firmware hash and repeat instructions. Earlier observations below
+are historical.
+
+---
+
 # Stage 5 initial board bring-up
 
 Date: 2026-09-12. One Pico 2 W connected over USB; RP2350 A2, 4 MiB flash.

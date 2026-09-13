@@ -7,7 +7,7 @@ using MultiNodeDAQ.Protocol;
 using MultiNodeDAQ.Recording;
 namespace MultiNodeDAQ.Acquisition;
 
-public sealed record ReceiverOptions(string Address="127.0.0.1",int Port=45100,int MaxConnections=32,int MaxSessions=128,bool AutoStart=true,bool VerifyCounter=true,int FrameTimeoutSeconds=15);
+public sealed record ReceiverOptions(string Address="127.0.0.1",int Port=45100,int MaxConnections=32,int MaxSessions=128,bool AutoStart=true,bool VerifyCounter=true,int FrameTimeoutSeconds=15,string[]? ConnectAddresses=null);
 public sealed class SessionStats
 {
     public required string Unit {get;init;}
@@ -36,7 +36,7 @@ public sealed class Receiver : IAsyncDisposable
     private readonly ReceiverOptions options;
     private readonly RecordingControl recording;
     private readonly Dictionary<string,PreviewBuffer> previews=[];
-    private readonly TcpListener listener;
+    private readonly TcpListener? listener;
     private readonly CancellationTokenSource stop=new();
     private readonly object gate=new();
     private readonly Dictionary<string,SessionStats> sessions=[];
@@ -56,11 +56,44 @@ public sealed class Receiver : IAsyncDisposable
     public Receiver(ReceiverOptions options, RecordingSession? recording=null)
     {
         Wire.Check(options.MaxConnections is >=1 and <=128 && options.MaxSessions>=options.MaxConnections && options.MaxSessions<=4096,"receiver limits");
-        this.options=options;this.recording=new RecordingControl(recording);listener=new(IPAddress.Parse(options.Address),options.Port);slots=new(options.MaxConnections);
+        if(options.ConnectAddresses is {} addresses)
+        {
+            Wire.Check(addresses.Length>0 && addresses.Length<=options.MaxConnections && addresses.Distinct().Count()==addresses.Length && options.Port is >=1 and <=65535,"outbound endpoints");
+            foreach(var address in addresses)IPAddress.Parse(address);
+            options=options with {ConnectAddresses=addresses.ToArray()};
+        }
+        this.options=options;this.recording=new RecordingControl(recording);
+        listener=options.ConnectAddresses is null?new(IPAddress.Parse(options.Address),options.Port):null;slots=new(options.MaxConnections);
     }
     public LiveHub Live { get; } = new();
-    public int Port=>((IPEndPoint)listener.LocalEndpoint).Port;
-    public void Start(){listener.Start(options.MaxConnections);accept=AcceptLoop();}
+    public int Port=>listener is null?options.Port:((IPEndPoint)listener.LocalEndpoint).Port;
+    public void Start()
+    {
+        if(listener is not null){listener.Start(options.MaxConnections);accept=AcceptLoop();}
+        else accept=Task.WhenAll(options.ConnectAddresses!.Select(ConnectLoop));
+    }
+    private async Task ConnectLoop(string address)
+    {
+        try
+        {
+            while(!stop.IsCancellationRequested)
+            {
+                using var client=new TcpClient();
+                try
+                {
+                    using var deadline=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+                    deadline.CancelAfter(TimeSpan.FromSeconds(5));
+                    await client.ConnectAsync(IPAddress.Parse(address),options.Port,deadline.Token);
+                    client.NoDelay=true;client.ReceiveBufferSize=64*1024;client.SendBufferSize=16*1024;
+                    await Handle(client);
+                }
+                catch(Exception e) when(e is SocketException or OperationCanceledException or ObjectDisposedException)
+                {if(!stop.IsCancellationRequested)Diagnostic($"Connect {address}:{options.Port}: {e.Message}");}
+                await Task.Delay(1000,stop.Token);
+            }
+        }
+        catch(OperationCanceledException) when(stop.IsCancellationRequested){}
+    }
     private void Diagnostic(string text){lock(gate){diagnostics.Enqueue(text);while(diagnostics.Count>64)diagnostics.Dequeue();}}
     private async Task AcceptLoop()
     {
@@ -68,7 +101,7 @@ public sealed class Receiver : IAsyncDisposable
         {
             while(!stop.IsCancellationRequested)
             {
-                var client=await listener.AcceptTcpClientAsync(stop.Token);
+                var client=await listener!.AcceptTcpClientAsync(stop.Token);
                 if(!slots.Wait(0)){Interlocked.Increment(ref rejected);client.Dispose();continue;}
                 client.NoDelay=true;client.ReceiveBufferSize=64*1024;client.SendBufferSize=16*1024;
                 var task=Handle(client);lock(gate)tasks.Add(task);
@@ -279,7 +312,7 @@ public sealed class Receiver : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        stop.Cancel();listener.Stop();if(accept is not null)await accept;
+        stop.Cancel();listener?.Stop();if(accept is not null)await accept;
         Task[] remaining;lock(gate){foreach(var c in active.Values)c.Client.Dispose();remaining=tasks.ToArray();}
         await Task.WhenAll(remaining);stop.Dispose();
     }

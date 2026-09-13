@@ -14,7 +14,7 @@ Remaining Stage 5 work: shared wire fixtures, hardware-paced synthetic XYZ produ
 
 stream.c uses Pico SDK 2.2.0 and lwIP raw TCP polling. The initial fixed configuration is ID 1, 25,000 XYZ rows/s, packed signed 24-bit counter data. No ADC, calibrated timing or clock synchronization is implemented.
 
-A hardware timer produces 256-row blocks every 10.24 ms. The 32-block RAM ring holds 8192 rows (327.68 ms). Production advances counters even when the ring overflows. STATUS reports dropped rows; DATA indices expose missing intervals. Each block remains buffered until its full frame is TCP-acknowledged. This is not a durable recording commit. Power loss discards buffered data.
+A hardware timer produces 256-row blocks every 10.24 ms. The 160-block RAM ring holds 40,960 rows (1.6384 seconds). Production advances counters even when the ring overflows. STATUS reports dropped rows; DATA indices expose missing intervals. Frames are pipelined through a bounded 64-entry acknowledgement ledger. Each block remains buffered until its full frame is TCP-acknowledged. This is not a durable recording commit. Power loss discards buffered data.
 
 Unit identity derives from the board ID; a random acquisition session is created on boot. Reconnect preserves both session and counters. A fresh receiver cannot yet recover configuration for an already-sampling Pico; reboot the Pico in that case. Additional modes, configurable rates, fault-injection tests and a two-board endurance test remain outstanding.
 
@@ -26,6 +26,32 @@ Create an ignored .artifacts/stage5/private/network.json with ssid, password, ho
 
 Flash with picotool load -v -x PATH_TO_UF2 --ser BOARD_SERIAL -f. Close COM3 first. USB diagnostics use 115200 baud with DTR.
 
-scripts/test-stage5-counter.py starts a C# receiver, waits for the Pico, measures 60 seconds, stops/drains recording and independently verifies counter data. The current bench IP is 192.168.1.180; change both firmware configuration and test address on another LAN.
+scripts/test-stage5-counter.py starts a C# receiver, waits for the Pico, measures 60 seconds, stops/drains recording and independently verifies counter data. For the tested computer-initiated mode, use --connect with the Pico DHCP address; see below.
 
-scripts/enable-stage5-firewall.ps1 is a machine-specific administrator helper. It opens only TCP 45230 for the local .NET runtime on Wi-Fi from 192.168.1.0/24. Remove after bench work with Remove-NetFirewallRule -Name MultiNodeDAQ-Stage5-WiFi.
+scripts/enable-stage5-firewall.ps1 is a legacy machine-specific administrator helper; it is not needed for computer-initiated TCP. It opens only TCP 45230 for the local .NET runtime on Wi-Fi from 192.168.1.0/24. Remove after bench work with Remove-NetFirewallRule -Name MultiNodeDAQ-Stage5-WiFi.
+
+### Computer-initiated TCP (preferred on this computer)
+
+Set `"transport": "listen"` in the ignored network.json and rebuild/flash.
+The Pico listens on the configured port (45230) and accepts one connection.
+The host initiates TCP and then uses the same HELLO/arm/start/stop protocol.
+No inbound receiver firewall rule or change from Public networking is needed.
+The default when transport is omitted remains `connect` for compatibility.
+The `host` field is unused in listen mode but retained in the private config.
+
+From `C:\dev\MultiNodeDAQ\software`, after rebooting the Pico:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/test-stage5-counter.py --connect 192.168.1.175 --port 45230 --ipc-port 45231
+.\.venv\Scripts\python.exe scripts/verify-stage5-counter.py .artifacts/stage5/counter-TIMESTAMP
+```
+
+Use the board's current DHCP address. For the host directly, `--connect IP[,IP]`
+creates bounded outbound connections instead of an acquisition listener, with
+one-second retry and five-second connection attempts. IPC remains loopback-only.
+This option is currently exposed through the host CLI and smoke harness.
+
+USB reports build/destination, TCP state, total loss, timer loss and queue loss.
+The larger sample ring uses a 16-packet receive pool; the linker map must be
+reviewed after memory changes. Bursts longer than available buffer capacity can
+still drop data; this is not a lossless endurance guarantee.

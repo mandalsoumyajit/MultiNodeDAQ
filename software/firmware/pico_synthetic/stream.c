@@ -14,11 +14,15 @@
 #include "vendor/cjson/cJSON.h"
 #include "private_config.h"
 #define ROWS 256u
-#define SLOTS 32u
+#define SLOTS 160u
 #define PAYLOAD (ROWS*9u)
 typedef struct { uint64_t first; uint8_t bytes[PAYLOAD]; } block;
 static block ring[SLOTS];
 static volatile uint32_t produced, consumed;
+static uint32_t submitted;
+// Slot cursors remain valid when the unsigned production counters wrap.
+static unsigned producer_slot,consumer_slot,submitted_slot;
+static volatile uint64_t timer_dropped, queue_dropped;
 static volatile uint64_t next_sample, dropped;
 static volatile bool sampling;
 static uint64_t epoch, epoch_first;
@@ -28,7 +32,11 @@ static uint64_t sequence, incoming_sequence;
 static bool incoming_seen, connected, ready, broken;
 static struct tcp_pcb *pcb;
 static uint8_t tx[PAYLOAD+100], rx[4096];
-static size_t tx_len, tx_written, tx_acked, rx_used;
+static size_t tx_len, tx_written, rx_used;
+#define FLIGHTS 64u
+typedef struct { size_t remaining; bool data; } flight;
+static flight flights[FLIGHTS];
+static unsigned flight_head,flight_tail;
 static bool tx_data;
 static uint64_t flight_started, reconnect_at, last_status, last_usb;
 static uint32_t crc_table[256];
@@ -52,15 +60,15 @@ static bool produce(struct repeating_timer *timer){
     (void)timer;if(!sampling)return true;
     uint64_t due=epoch_first+((time_us_64()-epoch)/10240)*ROWS;
     if(due<=next_sample)return true;
-    if(due-next_sample>ROWS){dropped+=due-next_sample-ROWS;next_sample=due-ROWS;}
+    if(due-next_sample>ROWS){timer_dropped+=due-next_sample-ROWS;dropped+=due-next_sample-ROWS;next_sample=due-ROWS;}
     uint64_t first=next_sample; next_sample+=ROWS;
-    if(produced-consumed==SLOTS){dropped+=ROWS;return true;}
-    block *b=&ring[produced%SLOTS];b->first=first;
+    if(produced-consumed==SLOTS){queue_dropped+=ROWS;dropped+=ROWS;return true;}
+    block *b=&ring[producer_slot];b->first=first;
     for(unsigned i=0;i<ROWS*3;i++){
         uint32_t code=(uint32_t)((first*3+i+MND_SEED)&0xffffff)-8388608u;
         put(b->bytes+i*3,code,3);
     }
-    __dmb();produced++;return true;
+    producer_slot=(producer_slot+1)%SLOTS;__dmb();produced++;return true;
 }
 static void enqueue(uint16_t kind,uint64_t first,const char *json){
     if(qhead-qtail==16){broken=true;return;}
@@ -157,7 +165,17 @@ static err_t receive(void *arg,struct tcp_pcb *t,struct pbuf *p,err_t err){
     }
     tcp_recved(t,p->tot_len);pbuf_free(p);return ERR_OK;
 }
-static err_t sent(void *arg,struct tcp_pcb *t,u16_t len){(void)arg;(void)t;tx_acked+=len;return ERR_OK;}
+static err_t sent(void *arg,struct tcp_pcb *t,u16_t len){
+    (void)arg;(void)t;size_t acknowledged=len;flight_started=time_us_64();
+    while(acknowledged){
+        if(flight_tail==flight_head){broken=true;return ERR_OK;}
+        flight *f=&flights[flight_tail%FLIGHTS];
+        size_t n=acknowledged<f->remaining?acknowledged:f->remaining;
+        f->remaining-=n;acknowledged-=n;
+        if(!f->remaining){if(f->data){consumer_slot=(consumer_slot+1)%SLOTS;__dmb();consumed++;}flight_tail++;}
+    }
+    return ERR_OK;
+}
 static void failed(void *arg,err_t err){(void)arg;(void)err;pcb=NULL;broken=true;}
 static err_t established(void *arg,struct tcp_pcb *t,err_t err){
     (void)arg;if(err!=ERR_OK){broken=true;return err;}connected=true;tcp_nagle_disable(t);
@@ -165,21 +183,30 @@ static err_t established(void *arg,struct tcp_pcb *t,err_t err){
     snprintf(j,sizeof j,"{\"firmware\":\"multinodedaq-pico-counter\",\"software_build\":\"%s\",\"protocol\":1,\"synthetic\":true,\"axes\":[\"X\",\"Y\",\"Z\"],\"encodings\":[1],\"capabilities\":[\"status\",\"arm\",\"start\",\"stop\",\"recover\"],\"label\":\"Pico 2 W\",\"mode\":\"counter\",\"seed\":%u,\"preferred_encoding\":1,\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\"}",MND_BUILD,MND_SEED,state,n);
     enqueue(1,n,j);return ERR_OK;
 }
+static err_t accept_connection(void *arg,struct tcp_pcb *client,err_t err){
+    (void)arg;
+    if(err!=ERR_OK)return err;
+    if(pcb){tcp_abort(client);return ERR_ABRT;}
+    pcb=client;tcp_recv(pcb,receive);tcp_sent(pcb,sent);tcp_err(pcb,failed);
+    return established(NULL,pcb,ERR_OK);
+}
 static void make_frame(uint16_t kind,uint64_t first,const void *payload,size_t len){
     memset(tx,0,96);memcpy(tx,"ELD1",4);put(tx+4,1,2);put(tx+6,kind,2);put(tx+8,100+len,4);
     memcpy(tx+16,unit,16);memcpy(tx+32,session,16);put(tx+48,sequence++,8);put(tx+56,first,8);
     put(tx+68,25000,4);put(tx+72,1,4);put(tx+88,len,4);
     if(kind==2){put(tx+64,ROWS,4);put(tx+84,3,2);put(tx+86,1,2);}
     memcpy(tx+96,payload,len);put(tx+96+len,crc(tx,96+len),4);
-    tx_len=100+len;tx_written=tx_acked=0;tx_data=kind==2;flight_started=time_us_64();
+    tx_len=100+len;tx_written=0;tx_data=kind==2;
+    if(flight_head==flight_tail)flight_started=time_us_64();
+    flights[flight_head++%FLIGHTS]=(flight){.remaining=tx_len,.data=tx_data};
 }
 static void network(void){
-    if(tx_len&&tx_acked==tx_len){if(tx_data){__dmb();consumed++;}tx_len=0;}
-    if(!tx_len){
+    if(tx_len&&tx_written==tx_len){if(tx_data){submitted++;submitted_slot=(submitted_slot+1)%SLOTS;}tx_len=0;}
+    if(!tx_len&&flight_head-flight_tail<FLIGHTS){
         if(qtail!=qhead){control *c=&queue[qtail++%16];make_frame(c->kind,c->first,c->json,strlen(c->json));}
-        else if(ready&&produced!=consumed){__dmb();block *b=&ring[consumed%SLOTS];make_frame(2,b->first,b->bytes,PAYLOAD);}
+        else if(ready&&produced!=submitted){__dmb();block *b=&ring[submitted_slot];make_frame(2,b->first,b->bytes,PAYLOAD);}
     }
-    if(tx_len&&time_us_64()-flight_started>10000000){broken=true;return;}
+    if(flight_head!=flight_tail&&time_us_64()-flight_started>10000000){broken=true;return;}
     if(tx_written<tx_len){
         size_t n=tx_len-tx_written;if(n>tcp_sndbuf(pcb))n=tcp_sndbuf(pcb);
         if(n){err_t e=tcp_write(pcb,tx+tx_written,(u16_t)n,TCP_WRITE_FLAG_COPY);if(e==ERR_OK){tx_written+=n;tcp_output(pcb);}else if(e!=ERR_MEM)broken=true;}
@@ -194,6 +221,13 @@ int main(void){
     struct repeating_timer timer;add_repeating_timer_us(-10240,produce,NULL,&timer);
     int init=cyw43_arch_init_with_country(CYW43_COUNTRY_USA);
     if(init){printf("{\"fatal\":\"radio_init\",\"code\":%d}\n",init);while(true)sleep_ms(1000);}
+    if(MND_LISTEN){
+        struct tcp_pcb *server=tcp_new_ip_type(IPADDR_TYPE_V4);
+        if(!server||tcp_bind(server,IP_ANY_TYPE,MND_PORT)!=ERR_OK){printf("{\"fatal\":\"tcp_bind\"}\n");while(true)sleep_ms(1000);}
+        struct tcp_pcb *listening=tcp_listen_with_backlog(server,1);
+        if(!listening){tcp_abort(server);printf("{\"fatal\":\"tcp_listen\"}\n");while(true)sleep_ms(1000);}
+        tcp_accept(listening,accept_connection);
+    }
     cyw43_arch_enable_sta_mode();
     cyw43_wifi_pm(&cyw43_state,CYW43_NO_POWERSAVE_MODE);
     cyw43_arch_wifi_connect_async(MND_SSID,MND_PASSWORD,CYW43_AUTH_WPA2_AES_PSK);
@@ -204,9 +238,9 @@ int main(void){
         if(pcb&&!connected&&now-connect_started>5000000)broken=true;
         if(broken||(connected&&link!=CYW43_LINK_UP)){
             if(pcb){tcp_arg(pcb,NULL);tcp_err(pcb,NULL);tcp_abort(pcb);pcb=NULL;}
-            connected=ready=broken=false;tx_len=rx_used=0;qhead=qtail=0;incoming_seen=false;reconnect_at=now+2000000;
+            connected=ready=broken=false;tx_len=rx_used=0;qhead=qtail=0;flight_head=flight_tail=0;submitted=consumed;submitted_slot=consumer_slot;incoming_seen=false;reconnect_at=now+2000000;
         }
-        if(link==CYW43_LINK_UP&&!pcb&&now>=reconnect_at){
+        if(!MND_LISTEN&&link==CYW43_LINK_UP&&!pcb&&now>=reconnect_at){
             ip_addr_t addr;if(ipaddr_aton(MND_HOST,&addr)){
                 connect_started=now;pcb=tcp_new_ip_type(IPADDR_TYPE_V4);
                 if(pcb){tcp_recv(pcb,receive);tcp_sent(pcb,sent);tcp_err(pcb,failed);if(tcp_connect(pcb,&addr,MND_PORT,established)!=ERR_OK)broken=true;}
@@ -215,8 +249,9 @@ int main(void){
         if(link<CYW43_LINK_NOIP&&now>=wifi_retry){cyw43_arch_wifi_connect_async(MND_SSID,MND_PASSWORD,CYW43_AUTH_WPA2_AES_PSK);wifi_retry=now+30000000;}
         if(connected){if(ready&&now-last_status>=1000000){status();last_status=now;}network();}
         if(now-last_usb>=1000000){
-            last_usb=now;if(stdio_usb_connected())printf("{\"ip\":\"%s\",\"pcb_state\":%d}\n",ip4addr_ntoa(netif_ip4_addr(&cyw43_state.netif[0])),pcb?(int)pcb->state:-1);uint32_t buffered;uint64_t loss,n=snapshot(&buffered,&loss);
+            last_usb=now;if(stdio_usb_connected())printf("{\"build\":\"%s\",\"receiver\":\"%s\",\"port\":%u}\n",MND_BUILD,MND_LISTEN?"listen":MND_HOST,(unsigned)MND_PORT);if(stdio_usb_connected())printf("{\"ip\":\"%s\",\"pcb_state\":%d}\n",ip4addr_ntoa(netif_ip4_addr(&cyw43_state.netif[0])),pcb?(int)pcb->state:-1);uint32_t buffered;uint64_t loss,n=snapshot(&buffered,&loss);
             if(stdio_usb_connected())printf("{\"firmware\":\"pico-counter\",\"wifi_link\":%d,\"tcp\":%s,\"ready\":%s,\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\",\"buffer_rows\":%"PRIu32",\"dropped_rows\":\"%"PRIu64"\"}\n",link,connected?"true":"false",ready?"true":"false",state,n,buffered,loss);
+            if(stdio_usb_connected())printf("{\"timer_dropped\":\"%"PRIu64"\",\"queue_dropped\":\"%"PRIu64"\"}\n",timer_dropped,queue_dropped);
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN,connected);
         }
         sleep_us(100);

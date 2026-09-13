@@ -27,15 +27,15 @@ if(argsMap.Has("replay"))
     await File.WriteAllTextAsync(output+".json",JsonSerializer.Serialize(new{range.Unit,range.AcquisitionSession,range.First,range.Count,range.Missing,range.SourceComplete,metadata=range.Metadata.Select(f=>Convert.ToBase64String(Wire.Encode(f))).ToArray()},new JsonSerializerOptions{WriteIndented=true}));
     Console.WriteLine($"Replayed {range.Blocks.Sum(f=>(long)f.Count)} rows to {output}; {range.Missing.Length} gap intervals.");return;
 }
-if(argsMap.Has("help")){Console.WriteLine("MultiNodeDAQ.Host [--ipc-port 45101] [--record NEW_DIRECTORY] [--address 127.0.0.1 --port 45100 --seconds 30 --interactive --no-auto-start] | --verify FILE_OR_DIRECTORY | --replay DIRECTORY --unit HEX --session HEX [--first 0 --count 1024 --output replay.csv --speed 0 --allow-incomplete] | --version");return;}
+if(argsMap.Has("help")){Console.WriteLine("MultiNodeDAQ.Host [--ipc-port 45101] [--record NEW_DIRECTORY] [--address 127.0.0.1 | --connect NODE_IP[,NODE_IP] --port 45100 --seconds 30 --interactive --no-auto-start] | --verify FILE_OR_DIRECTORY | --replay DIRECTORY --unit HEX --session HEX [--first 0 --count 1024 --output replay.csv --speed 0 --allow-incomplete] | --version");return;}
 using var stop=new CancellationTokenSource();Console.CancelKeyPress+=(_,e)=>{e.Cancel=true;stop.Cancel();};
 await using var recording=argsMap.Has("record")?new RecordingSession(new(argsMap.Get("record",""),SegmentBytes:(long)argsMap.Int("segment-mib",256)*1024*1024,FlushSeconds:argsMap.Double("flush-seconds",1))):null;
-var receiver=new Receiver(new(argsMap.Get("address","127.0.0.1"),argsMap.Int("port",45100),AutoStart:!argsMap.Has("no-auto-start")),recording);
+var receiver=new Receiver(new(argsMap.Get("address","127.0.0.1"),argsMap.Int("port",45100),AutoStart:!argsMap.Has("no-auto-start"),ConnectAddresses:argsMap.Has("connect")?argsMap.Get("connect","").Split(',',StringSplitOptions.TrimEntries):null),recording);
 receiver.Start();
 string? ipcToken=Environment.GetEnvironmentVariable("MULTINODEDAQ_IPC_TOKEN");
 await using var api=argsMap.Has("ipc-port")?new LocalApi(receiver,ipcToken??throw new ArgumentException("Set MULTINODEDAQ_IPC_TOKEN to a random token of at least 32 characters"),argsMap.Int("ipc-port",45101),()=>receiver.Recording.Snapshot()):null;
 if(api is not null){api.ShutdownRequested=()=>stop.Cancel();api.Start();}
-Console.WriteLine($"Receiver listening on {argsMap.Get("address","127.0.0.1")}:{receiver.Port}; recording: {recording?.DirectoryPath??"OFF"}.");
+Console.WriteLine($"Receiver {(argsMap.Has("connect")?"connecting to "+argsMap.Get("connect",""):"listening on "+argsMap.Get("address","127.0.0.1"))}:{receiver.Port}; recording: {recording?.DirectoryPath??"OFF"}.");
 if(argsMap.Double("seconds",0)>0)stop.CancelAfter(TimeSpan.FromSeconds(argsMap.Double("seconds",0)));
 Task? interactive=null;
 if(argsMap.Has("interactive"))interactive=Task.Run(async()=>

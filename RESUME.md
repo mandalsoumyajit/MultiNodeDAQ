@@ -1,3 +1,28 @@
+# Latest checkpoint: first one-Pico Wi-Fi smoke test PASSED
+
+Saved 2026-09-12 in C:\dev\MultiNodeDAQ. The Pico is programmed and verified.
+The cleaner connection direction works: the PC connects outward to the Pico,
+which listens at 192.168.1.175:45230. No inbound receiver firewall rule is needed.
+Windows is back on Public networking; all temporary firewall changes were removed.
+
+The 60-second run recorded 1,514,496 XYZ rows at 25,006.93 rows/s with zero
+missing rows, counter errors or reported drops. C# and independent Python
+verification passed; shutdown drained and closed the recording cleanly.
+
+Read [the tested checkpoint and repeat commands](software/docs/stage5-replacement-computer.md).
+Tools and the ignored private configuration are installed on this computer;
+transport is listen, board ID 895DFE4DF2C37EC4, USB COM5. The firmware pipelines
+TCP sends and buffers 40,960 rows (1.6384 seconds), retaining explicit overflow
+reporting. Use the Pico's current DHCP address with --connect.
+
+Next: command/re-arm/reconnect/overflow qualification, then additional waveforms,
+a second board and endurance. The initial smoke pass is not Stage 5 completion.
+
+The original handoff below is historical; the linked checkpoint supersedes its
+addresses, installed-tool state, transport instructions and NOT-passed status.
+
+---
+
 # Resume point: Stage 5 on another computer
 
 Saved 2026-09-12. Implementation checkpoint: **5749dc9**.

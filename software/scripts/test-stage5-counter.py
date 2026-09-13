@@ -3,6 +3,7 @@ import argparse, json, os, pathlib, secrets, subprocess, time
 from multinodedaq.client import Client
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--address',default='192.168.1.180')
+parser.add_argument('--connect',help='Initiate outbound TCP to a listening Pico IPv4 address')
 parser.add_argument('--port',type=int,default=45230)
 parser.add_argument('--ipc-port',type=int,default=45231)
 options=parser.parse_args()
@@ -13,7 +14,7 @@ env=dict(os.environ,MULTINODEDAQ_IPC_TOKEN=secrets.token_hex(32),DOTNET_ROOT=str
 dotnet=str(root/'.tools/dotnet/dotnet.exe')
 hostdll=str(root/'src/MultiNodeDAQ.Host/bin/Release/net10.0/MultiNodeDAQ.Host.dll')
 log=open(out/'host.log','w')
-host=subprocess.Popen([dotnet,hostdll,'--address',options.address,'--port',str(options.port),'--ipc-port',str(options.ipc_port),'--record',str(out/'recording'),'--summary',str(out/'host.json')],env=env,cwd=root,stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
+host=subprocess.Popen([dotnet,hostdll,*( ['--connect',options.connect] if options.connect else ['--address',options.address] ),'--port',str(options.port),'--ipc-port',str(options.ipc_port),'--record',str(out/'recording'),'--summary',str(out/'host.json')],env=env,cwd=root,stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
 print(str(out),flush=True)
 try:
     time.sleep(1)

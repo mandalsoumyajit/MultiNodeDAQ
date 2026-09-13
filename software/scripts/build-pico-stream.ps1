@@ -12,6 +12,8 @@ if(![Net.IPAddress]::TryParse([string]$taskConfig.host,[ref]$taskAddress) -or $t
 if([int]$taskConfig.port -lt 1 -or [int]$taskConfig.port -gt 65535){throw 'Invalid TCP port'}
 if($taskConfig.mode -and $taskConfig.mode -ne 'counter'){throw 'Only counter mode is implemented'}
 if($taskConfig.country -and $taskConfig.country -ne 'US'){throw 'This bench firmware currently uses the US regulatory domain'}
+$taskTransport=if($taskConfig.transport){[string]$taskConfig.transport}else{'connect'}
+if($taskTransport -notin @('connect','listen')){throw 'Transport must be connect or listen'}
 $taskPrivate=Join-Path $taskRoot '.artifacts/stage5/private'
 New-Item -ItemType Directory -Force $taskPrivate | Out-Null
 # Credentials appear only in an ignored header and local build artifacts.
@@ -21,6 +23,7 @@ function CLiteral([string]$Value) {
 }
 $taskHeader=@(
     '#pragma once',
+    ('#define MND_LISTEN '+[int]($taskTransport -eq 'listen')),
     ('#define MND_SSID '+(CLiteral $taskConfig.ssid)),
     ('#define MND_PASSWORD '+(CLiteral $taskConfig.password)),
     ('#define MND_HOST '+(CLiteral $taskConfig.host)),

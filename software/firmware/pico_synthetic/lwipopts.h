@@ -16,7 +16,7 @@
 #define MEM_SIZE 32768
 #define MEMP_NUM_TCP_SEG 128
 #define MEMP_NUM_ARP_QUEUE 10
-#define PBUF_POOL_SIZE 32
+#define PBUF_POOL_SIZE 16
 #define TCP_MSS 1460
 #define TCP_WND (16*TCP_MSS)
 #define TCP_SND_BUF (16*TCP_MSS)
