@@ -1,3 +1,18 @@
+## GUI aliases and IP display (2026-09-13)
+
+Implemented editable local aliases keyed by permanent unit ID, with separate live/last IP and TCP port display. Use **Edit alias**; blank restores the firmware label. Preferences live in `%LOCALAPPDATA%\MultiNodeDAQ\aliases.json`. Operator instructions are in `software/docs/stage4-operation.md`.
+
+Validated an isolated Release build (zero warnings/errors), 71 integration assertions, 34 desktop assertions, and the rendered fleet layout. Build outputs are under `software/.artifacts/gui-alias-build/bin`; the original Release binaries and active two-board battery receiver were deliberately left running unchanged. After the endurance test and verification finish, rebuild normally and restart the receiver/desktop to activate endpoint reporting.
+
+# Active two-board battery test — 2026-09-13
+
+Both boards are running the two-hour concurrent counter test, started at about
+07:02 EDT; measurement is due to finish about 09:02 EDT, followed by automatic
+verification. **No two-board endurance result is claimed yet.**
+See [run details and artifact locations](software/docs/stage5-two-board-battery-run.md).
+Read the active run's status.json/report.json before starting another receiver.
+
+---
 # Latest checkpoint: first one-Pico Wi-Fi smoke test PASSED
 
 Saved 2026-09-12 in C:\dev\MultiNodeDAQ. The Pico is programmed and verified.
@@ -15,6 +30,12 @@ transport is listen, board ID 895DFE4DF2C37EC4, USB COM5. The firmware pipelines
 TCP sends and buffers 40,960 rows (1.6384 seconds), retaining explicit overflow
 reporting. Use the Pico's current DHCP address with --connect.
 
+## Second board update — 2026-09-13
+
+Second Pico **1A0D3F9F4FDF64D9** now has the same verified firmware as the first.
+USB is COM6; its observed DHCP address is 192.168.1.178, listening on TCP 45230.
+Boot and Wi-Fi are verified; second-board streaming/two-board qualification
+remain pending. See [the programming record](software/docs/stage5-second-board.md).
 Next: command/re-arm/reconnect/overflow qualification, then additional waveforms,
 a second board and endurance. The initial smoke pass is not Stage 5 completion.
 

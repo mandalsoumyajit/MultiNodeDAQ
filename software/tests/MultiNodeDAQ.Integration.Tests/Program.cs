@@ -119,6 +119,7 @@ await using(var receiver=new Receiver(new(Port:0)))
         }
         var snapshot=Json(receiver.Snapshot());
         Check(snapshot.GetProperty("connections").GetInt64()==2,"outbound reconnect count");
+        Check(snapshot.GetProperty("units")[0].GetProperty("ip_address").GetString()=="127.0.0.1" && snapshot.GetProperty("units")[0].GetProperty("tcp_port").GetInt32()==port,"outbound endpoint survives reconnect");
         Check(snapshot.GetProperty("units")[0].GetProperty("reconnects").GetInt32()==1,"outbound session reused");
         Check(snapshot.GetProperty("errors").GetInt64()==0,"outbound retry corrupted protocol state");
     }

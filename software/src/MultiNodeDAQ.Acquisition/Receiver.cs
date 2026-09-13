@@ -13,6 +13,8 @@ public sealed class SessionStats
     public required string Unit {get;init;}
     public required string Session {get;init;}
     public string Label {get;set;}="";
+    public string? IpAddress {get;set;}
+    public int? TcpPort {get;set;}
     public string State {get;set;}="idle";
     public bool Connected {get;set;}
     public bool Synthetic {get;set;}
@@ -134,6 +136,8 @@ public sealed class Receiver : IAsyncDisposable
                 else {Wire.Check(hello.Sequence>stats.LastSequence,"reconnect sequence");Wire.Check(stats.Synthetic==Metadata.Bool(h,"synthetic") && stats.Mode==(h.TryGetProperty("mode",out _)?Metadata.Text(h,"mode"):"unknown") && stats.Seed==(h.TryGetProperty("seed",out _)?Metadata.Number(h,"seed"):0),"session metadata changed");stats.Reconnects++;}
                 stats.InitialRate=hello.Rate;stats.InitialConfig=hello.Config;stats.InitialEncoding=h.TryGetProperty("preferred_encoding",out _)?Metadata.Number(h,"preferred_encoding"):1;
                 stats.Label=h.TryGetProperty("label",out var label)?label.GetString()??unit:unit;
+                var endpoint=(IPEndPoint)client.Client.RemoteEndPoint!;
+                stats.IpAddress=(endpoint.Address.IsIPv4MappedToIPv6?endpoint.Address.MapToIPv4():endpoint.Address).ToString();stats.TcpPort=endpoint.Port;
                 stats.State=h.TryGetProperty("state",out _)?Metadata.State(h):"idle";stats.Connected=true;stats.LastSequence=hello.Sequence;
                 // A continuing session reuses acknowledged configs; new sampling sessions cannot silently invent one.
                 connection=new(client,stats);active.Add(unit,connection);connections++;
@@ -283,7 +287,7 @@ public sealed class Receiver : IAsyncDisposable
             limits=new{max_connections=options.MaxConnections,max_sessions=options.MaxSessions,max_frame_bytes=Wire.MaxFrame,recent_hashes_per_session=1024,max_gap_intervals=1024},
             diagnostics=diagnostics.ToArray(),units=sessions.Values.Select(s=>new
             {
-                unit=s.Unit,session=s.Session,label=s.Label,state=s.State,connected=s.Connected,mode=s.Mode,synthetic=s.Synthetic,
+                unit=s.Unit,session=s.Session,label=s.Label,ip_address=s.IpAddress,tcp_port=s.TcpPort,state=s.State,connected=s.Connected,mode=s.Mode,synthetic=s.Synthetic,
                 config=s.Configs.Count>0?new{id=s.Configs.Last().Key,sample_rate_hz=s.Configs.Last().Value.Rate,encoding=(uint)s.Configs.Last().Value.Encoding,synthetic=s.Synthetic}:new{id=s.InitialConfig,sample_rate_hz=s.InitialRate,encoding=s.InitialEncoding,synthetic=s.Synthetic},
                 frames=s.Frames,rows=s.Rows,payload_bytes=s.Bytes,next_sample=s.NextSample,missing_rows=s.Missing,recovered_rows=s.Recovered,
                 duplicate_frames=s.Duplicates,conflicts=s.Conflicts,sample_errors=s.SampleErrors,reported_drops=s.ReportedDrops,sequence_gaps=s.SequenceGaps,reconnects=s.Reconnects,

@@ -13,7 +13,7 @@ using MultiNodeDAQ.Recording;
 using MultiNodeDAQ.Protocol;
 namespace MultiNodeDAQ.Desktop;
 
-public sealed record NodeView(string Unit,string Session,string Label,string Identity,string States,string Health,Brush Color,JsonElement Raw);
+public sealed record NodeView(string Unit,string Session,string Label,string Identity,string States,string Health,Brush Color,JsonElement Raw,string Endpoint="IP unavailable");
 public partial class MainWindow : Window
 {
     private ApiClient api=null!;
@@ -32,19 +32,30 @@ public partial class MainWindow : Window
     private ulong replayFirst;
     private long replayTick;
     private readonly string profile=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MultiNodeDAQ","connection.json");
-    public MainWindow()
+    private readonly UnitAliases aliases;
+    public MainWindow():this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"MultiNodeDAQ","aliases.json")){}
+    public MainWindow(string aliasPath)
     {
+        aliases=new UnitAliases(aliasPath);
         InitializeComponent();Title="MultiNodeDAQ "+System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(App).Assembly)?.InformationalVersion;if(Environment.GetCommandLineArgs().Contains("--minimized"))WindowState=WindowState.Minimized;
         try{if(File.Exists(profile)){using var p=JsonDocument.Parse(File.ReadAllBytes(profile));port=p.RootElement.GetProperty("port").GetInt32();token=p.RootElement.GetProperty("token").GetString()??"";}}catch(Exception e){AddEvent("Connection profile: "+e.Message);}
         token=Environment.GetEnvironmentVariable("MULTINODEDAQ_IPC_TOKEN")??token;
         if(int.TryParse(Environment.GetEnvironmentVariable("MULTINODEDAQ_IPC_PORT"),out int configured))port=configured;
         if(token.Length<32)token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        try{aliases.Load();}catch(Exception e){AddEvent("Aliases could not be loaded: "+e.Message);}
         api=new(port,token);timer.Tick+=async(_,_)=>{if(playing&&Workspace.SelectedIndex==1)await Run(AdvanceReplay);};timer.Tick+=async(_,_)=>await Poll();Loaded+=async(_,_)=>{timer.Start();await Poll();};
     }
     private void SaveProfile(){Directory.CreateDirectory(Path.GetDirectoryName(profile)!);File.WriteAllText(profile,JsonSerializer.Serialize(new{port,token}));}
     private void AddEvent(string message){if(message.Length>2000)message=message[..2000]+"…";Events.Items.Insert(0,DateTime.Now.ToString("HH:mm:ss")+"  "+message);while(Events.Items.Count>100)Events.Items.RemoveAt(Events.Items.Count-1);}
     private static string Text(JsonElement x,string name)=>x.TryGetProperty(name,out var v)?v.ToString():"unavailable";
     private static double Number(JsonElement x,string name,double fallback=0)=>x.TryGetProperty(name,out var v)&&v.TryGetDouble(out var n)?n:fallback;
+    public static string EndpointText(JsonElement node)
+    {
+        if(!node.TryGetProperty("ip_address",out var ip)||ip.ValueKind!=JsonValueKind.String||string.IsNullOrWhiteSpace(ip.GetString()))return "IP unavailable (service update required)";
+        string address=ip.GetString()!;
+        string endpoint=node.TryGetProperty("tcp_port",out var p)&&p.TryGetInt32(out int port)?(address.Contains(':')?$"[{address}]:{port}":$"{address}:{port}"):address;
+        return (node.GetProperty("connected").GetBoolean()?"IP: ":"Last IP: ")+endpoint;
+    }
     private NodeView? Selected=>Fleet.SelectedItem as NodeView;
     private async Task Poll()
     {
@@ -60,7 +71,7 @@ public partial class MainWindow : Window
                 var workerState=current.GetProperty("analysis_summary").EnumerateArray().FirstOrDefault(a=>Text(a,"unit").Equals(Text(n,"unit"),StringComparison.OrdinalIgnoreCase)&&Text(a,"acquisition_session").Equals(Text(n,"session"),StringComparison.OrdinalIgnoreCase));
                 string worker=workerState.ValueKind==JsonValueKind.Undefined?"unavailable":Number(workerState,"age_seconds")>3?"stale":workerState.GetProperty("valid").GetBoolean()?"current":"invalid";
                 string health=$"Analysis: {worker} · Age {(double.IsFinite(age)?age.ToString("F2")+" s":"unavailable")} · missing {Text(n,"missing_rows")} · errors {Text(n,"sample_errors")}";
-                return new NodeView(Text(n,"unit"),Text(n,"session"),Text(n,"label")+(n.GetProperty("synthetic").GetBoolean()?" · synthetic":""),Text(n,"unit")[^8..]+" · "+Text(n,"session")[..8],$"Sampling: {Text(n,"state")}\nLink: {stream} · Log: {recordState}",health,!connected||age>.5||Number(n,"missing_rows")>0?Brushes.DarkGoldenrod:Brushes.DarkSlateGray,n.Clone());
+                return new NodeView(Text(n,"unit"),Text(n,"session"),aliases.Display(Text(n,"unit"),Text(n,"label"))+(n.GetProperty("synthetic").GetBoolean()?" · synthetic":""),Text(n,"unit")[^8..]+" · "+Text(n,"session")[..8],$"Sampling: {Text(n,"state")}\nLink: {stream} · Log: {recordState}",health,!connected||age>.5||Number(n,"missing_rows")>0?Brushes.DarkGoldenrod:Brushes.DarkSlateGray,n.Clone(),EndpointText(n));
             }).ToArray();
             string? key=Selected?.Unit+":"+Selected?.Session;Fleet.ItemsSource=nodes;Fleet.SelectedItem=nodes.FirstOrDefault(n=>n.Unit+":"+n.Session==key)??nodes.FirstOrDefault();
             if(recording.ValueKind!=JsonValueKind.Null&&recordState is not ("draining" or "starting"))
@@ -176,7 +187,16 @@ public partial class MainWindow : Window
     }
     private async void StartSampling(object sender,RoutedEventArgs e)=>await Run(()=>Command("start"));
     private async void StopSampling(object sender,RoutedEventArgs e)=>await Run(()=>Command("stop"));
-    private void UnitDetails(object sender,RoutedEventArgs e){if(Selected is {} n)MessageBox.Show(this,JsonSerializer.Serialize(n.Raw,new JsonSerializerOptions{WriteIndented=true})+"\nCalibration, battery and RSSI: unavailable.",n.Label);}
+    private async void EditAlias(object sender,RoutedEventArgs e)=>await Run(async()=>
+    {
+        if(Selected is not {} node)return;
+        var dialog=new FieldsDialog("Sensor alias",[("Alias",aliases.Get(node.Unit))],"Saved on this computer for this board's permanent ID. Maximum 64 characters. Leave blank to use the firmware label."){Owner=this};
+        if(dialog.ShowDialog()!=true)return;
+        aliases.Set(node.Unit,dialog.Values[0]);
+        AddEvent("Alias saved for "+node.Unit+": "+aliases.Display(node.Unit,Text(node.Raw,"label")));
+        await Poll();
+    });
+    private void UnitDetails(object sender,RoutedEventArgs e){if(Selected is {} n)MessageBox.Show(this,n.Label+"\n"+n.Endpoint+"\n"+JsonSerializer.Serialize(n.Raw,new JsonSerializerOptions{WriteIndented=true})+"\nCalibration, battery and RSSI: unavailable.",n.Label);}
     private void Connection(object sender,RoutedEventArgs e)
     {
         var dialog=new FieldsDialog("Local service connection",[("Port",port.ToString()),("Token",token)]);dialog.Owner=this;if(dialog.ShowDialog()!=true)return;

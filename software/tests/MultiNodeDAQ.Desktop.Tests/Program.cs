@@ -20,23 +20,43 @@ static class Program
         string root=Path.GetFullPath(".artifacts/stage4/test-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try
         {
+            string aliasPath=Path.Combine(root,"aliases.json");
+            string firstUnit="4D4E442D5049434F895DFE4DF2C37EC4",secondUnit="4D4E442D5049434F1A0D3F9F4FDF64D9";
+            var aliases=new UnitAliases(aliasPath);aliases.Load();
+            Check(aliases.Display(firstUnit,"Pico 2 W")=="Pico 2 W","firmware label fallback");
+            aliases.Set(firstUnit.ToLowerInvariant(),"  North sensor  ");aliases.Set(secondUnit,"South sensor");
+            var reloaded=new UnitAliases(aliasPath);reloaded.Load();
+            Check(reloaded.Get(firstUnit)=="North sensor" && reloaded.Get(secondUnit)=="South sensor","aliases persist by stable unit ID");
+            bool badAlias=false;try{reloaded.Set(firstUnit,new string('x',65));}catch(ArgumentException){badAlias=true;}
+            Check(badAlias && reloaded.Get(firstUnit)=="North sensor","invalid alias leaves existing mapping intact");
+            reloaded.Set(firstUnit,"");aliases.Load();Check(aliases.Display(firstUnit,"Pico 2 W")=="Pico 2 W" && aliases.Get(secondUnit)=="South sensor","reset affects only selected unit");
+            Check(MainWindow.EndpointText(Json(new{ip_address="192.168.1.175",tcp_port=45230,connected=true}))=="IP: 192.168.1.175:45230","live IP display");
+            Check(MainWindow.EndpointText(Json(new{ip_address="192.168.1.178",tcp_port=45230,connected=false})).StartsWith("Last IP:"),"offline endpoint marked stale");
+            Check(MainWindow.EndpointText(Json(new{connected=true})).StartsWith("IP unavailable"),"old service remains compatible");
             var p=Task.Run(()=>Exercise(root)).GetAwaiter().GetResult();
             var uiReceiver=new Receiver(new(Port:0));uiReceiver.Start();var uiApi=new LocalApi(uiReceiver,new string('c',64),0,()=>uiReceiver.Recording.Snapshot());uiApi.Start();
             using var uiStop=new CancellationTokenSource();var uiFleet=new Fleet(new(){Nodes=2,Seconds=10,Mode="tone"},"127.0.0.1",uiReceiver.Port);var uiRun=Task.Run(()=>uiFleet.RunAsync(uiStop.Token));
             Environment.SetEnvironmentVariable("MULTINODEDAQ_IPC_TOKEN",new string('c',64));Environment.SetEnvironmentVariable("MULTINODEDAQ_IPC_PORT",uiApi.Port.ToString());
-            Thread.Sleep(400);var app=new App();app.InitializeComponent();var window=new MainWindow();
+            Thread.Sleep(400);var app=new App();app.InitializeComponent();var window=new MainWindow(aliasPath);
             SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext());
             var polling=(Task)typeof(MainWindow).GetMethod("Poll",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(window,null)!;
             var pump=new System.Windows.Threading.DispatcherFrame();polling.ContinueWith(_=>window.Dispatcher.BeginInvoke(()=>pump.Continue=false));System.Windows.Threading.Dispatcher.PushFrame(pump);polling.GetAwaiter().GetResult();
             Check(((System.Windows.Controls.TextBlock)window.FindName("ConnectionStatus")).Text.Contains("connected"),"actual GUI status polling");
             Check(((PlotView)window.FindName("Wave")).Data is not null,"actual GUI live waveform");
+            var liveNodes=((System.Windows.Controls.ListBox)window.FindName("Fleet")).Items.Cast<NodeView>().ToArray();
+            Check(liveNodes.Length==2 && liveNodes.All(n=>n.Endpoint.StartsWith("IP: 127.0.0.1:")),"GUI shows actual socket endpoints");
+            var uiAliases=(UnitAliases)typeof(MainWindow).GetField("aliases",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
+            uiAliases.Set(liveNodes[0].Unit,"Bench A");
+            polling=(Task)typeof(MainWindow).GetMethod("Poll",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.Invoke(window,null)!;
+            pump=new System.Windows.Threading.DispatcherFrame();polling.ContinueWith(_=>window.Dispatcher.BeginInvoke(()=>pump.Continue=false));System.Windows.Threading.Dispatcher.PushFrame(pump);polling.GetAwaiter().GetResult();
+            Check(((System.Windows.Controls.ListBox)window.FindName("Fleet")).Items.Cast<NodeView>().Single(n=>n.Unit==liveNodes[0].Unit).Label.StartsWith("Bench A"),"GUI applies stored alias while retaining synthetic marker");
             SynchronizationContext.SetSynchronizationContext(null);uiStop.Cancel();Task.Run(async()=>{try{await uiRun;}catch(OperationCanceledException){}await uiApi.DisposeAsync();await uiReceiver.DisposeAsync();}).GetAwaiter().GetResult();
             var wave=(PlotView)window.FindName("Wave");wave.Data=MainWindow.Envelope(p);
             if(File.Exists(Path.Combine(root,"status.json")))
             {
                 using var statusDoc=JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root,"status.json")));
                 var list=(System.Windows.Controls.ListBox)window.FindName("Fleet");
-                list.ItemsSource=statusDoc.RootElement.GetProperty("acquisition").GetProperty("units").EnumerateArray().Select(n=>new NodeView(n.GetProperty("unit").GetString()!,n.GetProperty("session").GetString()!,n.GetProperty("label").GetString()!+" · synthetic",n.GetProperty("unit").GetString()![..8],"Sampling: sampling\nLink: streaming · Log: recording","Captured diagnostic data · local counters",Brushes.DarkSlateGray,n.Clone())).ToArray();
+                list.ItemsSource=statusDoc.RootElement.GetProperty("acquisition").GetProperty("units").EnumerateArray().Select(n=>new NodeView(n.GetProperty("unit").GetString()!,n.GetProperty("session").GetString()!,n.GetProperty("label").GetString()!+" · synthetic",n.GetProperty("unit").GetString()![..8],"Sampling: sampling\nLink: streaming · Log: recording","Captured diagnostic data · local counters",Brushes.DarkSlateGray,n.Clone(),MainWindow.EndpointText(n))).ToArray();
                 ((System.Windows.Controls.TextBlock)window.FindName("RecordingStatus")).Text="RECORDING · Stage 4 automated rendering check";
             }
             string? analysisFile=Directory.GetFiles(".artifacts/stage4","analysis.json",SearchOption.AllDirectories).LastOrDefault();

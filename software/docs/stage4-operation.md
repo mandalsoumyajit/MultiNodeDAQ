@@ -10,6 +10,16 @@ For normal operation, launch MultiNodeDAQ.Desktop.exe. **Start local service** s
 
 For physical nodes, start the packaged host with --address LAPTOP_LAN_IP --port 45100 --ipc-port 45101 and MULTINODEDAQ_IPC_TOKEN set to the GUI token. Sensor traffic is LAN TCP; IPC is always loopback. Network binding and firewall changes are explicit operator tasks.
 
+## Board names and addresses
+
+The sensor fleet shows a display name, the current IP address and TCP port, and the unit/session identity separately. Disconnected sessions show **Last IP** so a stale address is not presented as a live connection. An older receiver that does not report endpoints shows an explicit service-update message.
+
+Select a board and choose **Edit alias** to give it a local name such as `Bench A` or `North sensor`. Names are trimmed and limited to 64 characters. Clear the field to restore the firmware-provided label. The synthetic-source marker remains visible.
+
+Aliases are saved in `%LOCALAPPDATA%\MultiNodeDAQ\aliases.json`, keyed by the full permanent unit ID. They survive GUI restarts, board reboots and DHCP address changes. They apply only to this Windows user on this computer; they do not rename firmware or change recorded metadata. **Unit details** retains the full identity and original receiver metadata.
+
+Update both the desktop and receiver to enable IP display. Finalize any active recording before restarting the receiver; updating the GUI alone cannot add endpoint information to an older running service.
+
 ## Acquire
 
 - Select a unit/acquisition-session pair. Synthetic sources are labeled.
