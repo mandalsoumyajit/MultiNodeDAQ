@@ -24,6 +24,7 @@ public sealed class SessionStats
     public int Reconnects,ParserCapacity;
     public long LastDataTicks,FirstDataTicks,DrainedTicks;
     public uint BufferRows;
+    public JsonElement? SourceDiagnostics;
     public uint InitialRate,InitialConfig,InitialEncoding;
     internal ulong LastSequence,HostSequence,Request;
     internal long TimingBytes;
@@ -189,6 +190,7 @@ public sealed class Receiver : IAsyncDisposable
                         lock(gate)
                         {
                             var s=connection.Stats;s.State=Metadata.State(o);s.ReportedDrops=Metadata.Counter(o,"dropped_rows");s.BufferRows=Metadata.Number(o,"buffer_rows");
+                            s.SourceDiagnostics=o.TryGetProperty("diagnostics",out var sourceDiagnostics)?sourceDiagnostics.Clone():null;
                             // A drained idle source declares a terminal watermark, including a lost tail.
                             ulong next=Metadata.Counter(o,"next_sample");
                             if(s.State=="idle" && s.BufferRows==0)s.DrainedTicks=Stopwatch.GetTimestamp();
@@ -292,7 +294,7 @@ public sealed class Receiver : IAsyncDisposable
                 frames=s.Frames,rows=s.Rows,payload_bytes=s.Bytes,next_sample=s.NextSample,missing_rows=s.Missing,recovered_rows=s.Recovered,
                 duplicate_frames=s.Duplicates,conflicts=s.Conflicts,sample_errors=s.SampleErrors,reported_drops=s.ReportedDrops,sequence_gaps=s.SequenceGaps,reconnects=s.Reconnects,
                 average_payload_bytes_per_second=s.FirstDataTicks==0?0:s.Bytes/Math.Max(0.001,Stopwatch.GetElapsedTime(s.FirstDataTicks).TotalSeconds),
-                source_buffer_rows=s.BufferRows,receiver_queued_bytes=0,
+                source_buffer_rows=s.BufferRows,source_diagnostics=s.SourceDiagnostics,receiver_queued_bytes=0,
                 data_age_seconds=s.LastDataTicks==0?(double?)null:Stopwatch.GetElapsedTime(s.LastDataTicks).TotalSeconds,
                 parser_capacity=s.ParserCapacity,recent_hashes=s.Recent.Count,gap_intervals=s.Holes.Count,pending_commands=active.TryGetValue(s.Unit,out var c)?c.Pending.Count:0
             }).ToArray(),memory=new{managed_bytes=GC.GetTotalMemory(false),working_set_bytes=Environment.WorkingSet}

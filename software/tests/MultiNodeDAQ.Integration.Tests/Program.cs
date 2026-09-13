@@ -129,6 +129,18 @@ await using(var receiver=new Receiver(new(Port:0)))
     }
     checks++;
 }
+// Optional source diagnostics survive STATUS ingestion; legacy STATUS remains valid.
+await using(var receiver=new Receiver(new(Port:0,AutoStart:false)))
+{
+    receiver.Start();using var client=new TcpClient();await client.ConnectAsync("127.0.0.1",receiver.Port);
+    using var parser=new FrameStream();using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    await client.GetStream().WriteAsync(Wire.Encode(fixture));await parser.ReadAsync(client.GetStream(),deadline.Token);
+    var sourceStatus=Metadata.Json(3,fixture.Unit,fixture.Session,fixture.Sequence+1,0,new{state="idle",next_sample="0",buffer_rows=0,dropped_rows="0",diagnostics=new{timer_dropped="0",queue_dropped="0",peak_buffer_rows=40960,max_ack_wait_us="2800000",max_loop_gap_us="1000"}});
+    await client.GetStream().WriteAsync(Wire.Encode(sourceStatus));
+    JsonElement snapshot;
+    do{await Task.Delay(10,deadline.Token);snapshot=Json(receiver.Snapshot());}while(snapshot.GetProperty("units")[0].GetProperty("source_diagnostics").ValueKind==JsonValueKind.Null);
+    Check(snapshot.GetProperty("units")[0].GetProperty("source_diagnostics").GetProperty("max_ack_wait_us").GetString()=="2800000","source ACK diagnostics retained");
+}
 // Stage 3 subscribers retain at most two seconds, independent of recorder queues.
 var hub=new LiveHub();var subscription=hub.Subscribe([Convert.ToHexString(fixture.Unit)]);
 for(ulong i=0;i<300;i++)hub.Publish(Synthetic.Data(fixture.Unit,fixture.Session,i,i*256,256,25000,2,"counter",17));

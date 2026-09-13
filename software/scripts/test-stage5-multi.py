@@ -1,5 +1,6 @@
 """Battery-powered multi-Pico counter endurance test with independent verification."""
 import argparse
+import ctypes
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -15,6 +16,8 @@ parser.add_argument('--connect',required=True,help='Comma-separated Pico IPv4 ad
 parser.add_argument('--boards',default='895DFE4DF2C37EC4,1A0D3F9F4FDF64D9')
 parser.add_argument('--seconds',type=int,default=7200)
 parser.add_argument('--port',type=int,default=45230)
+parser.add_argument('--host-dll',type=Path,help='Isolated diagnostic host build')
+parser.add_argument('--require-diagnostics',action='store_true')
 parser.add_argument('--ipc-port',type=int,default=45231)
 parser.add_argument('--output',type=Path,required=True)
 options=parser.parse_args()
@@ -37,10 +40,13 @@ def nodes_by_unit(snapshot):
 status('starting')
 env=dict(os.environ,MULTINODEDAQ_IPC_TOKEN=secrets.token_hex(32),DOTNET_ROOT=str(root/'.tools/dotnet'))
 dotnet=str(root/'.tools/dotnet/dotnet.exe')
-hostdll=str(root/'src/MultiNodeDAQ.Host/bin/Release/net10.0/MultiNodeDAQ.Host.dll')
+hostdll=str(options.host_dll.resolve() if options.host_dll else root/'src/MultiNodeDAQ.Host/bin/Release/net10.0/MultiNodeDAQ.Host.dll')
 log=(out/'host.log').open('w')
 host=None
 try:
+    # Thread-scoped request is released on exit; no persistent power policy change.
+    if os.name=="nt" and not ctypes.windll.kernel32.SetThreadExecutionState(0x80000001):
+        raise OSError("Could not hold the PC awake for acquisition")
     host=subprocess.Popen([dotnet,hostdll,'--connect',options.connect,'--port',str(options.port),'--ipc-port',str(options.ipc_port),'--record',str(out/'recording'),'--summary',str(out/'host.json')],env=env,cwd=root,stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
     save('run.json',dict(host_pid=host.pid,test_pid=os.getpid(),connect=options.connect,boards=serials,seconds=options.seconds,started_at=datetime.now(timezone.utc).isoformat()))
     time.sleep(1)
@@ -53,6 +59,8 @@ try:
             if time.monotonic()>deadline:raise TimeoutError('Both boards did not stream within 150 seconds')
             status('waiting_for_boards',units=list(nodes.values()))
             time.sleep(1)
+        if options.require_diagnostics:
+            assert all(isinstance(n.get('source_diagnostics'),dict) and all(k in n['source_diagnostics'] for k in ['timer_dropped','queue_dropped','peak_buffer_rows','max_ack_wait_us','max_loop_gap_us']) for n in nodes.values()), 'Diagnostic firmware and receiver required'
         first={u:n['rows'] for u,n in nodes.items()}
         sessions={u:n['session'] for u,n in nodes.items()}
         peaks={u:n['source_buffer_rows'] for u,n in nodes.items()}
@@ -83,7 +91,7 @@ try:
     independent=json.loads((out/'python-verify.json').read_text()) if python_check.returncode==0 else None
     summaries=[]
     for u,n in final_nodes.items():
-        summaries.append(dict(unit=u,session=n['session'],rows=n['rows'],observed_rows_per_second=rates[u],missing_rows=n['missing_rows'],sample_errors=n['sample_errors'],reported_drops=n['reported_drops'],reconnects=n['reconnects'],sampled_peak_source_buffer_rows=peaks[u]))
+        summaries.append(dict(unit=u,session=n['session'],rows=n['rows'],observed_rows_per_second=rates[u],missing_rows=n['missing_rows'],sample_errors=n['sample_errors'],reported_drops=n['reported_drops'],reconnects=n['reconnects'],sampled_peak_source_buffer_rows=peaks[u],source_diagnostics=n.get('source_diagnostics')))
     passed=(host.returncode==0 and check.returncode==0 and python_check.returncode==0 and independent['lossless'] and stopped['state']=='complete' and final['acquisition']['errors']==0 and set(final_nodes)==expected and all(n['missing_rows']==n['sample_errors']==n['reported_drops']==0 and 24500<rates[u]<25500 and n['state']=='idle' and n['source_buffer_rows']==0 for u,n in final_nodes.items()))
     report=dict(passed=passed,measurement_seconds=elapsed,units=summaries,total_rows=sum(n['rows'] for n in final_nodes.values()),recording_state=stopped['state'],host_exit=host.returncode,verify_exit=check.returncode,python_verify_exit=python_check.returncode,acquisition_errors=final['acquisition']['errors'])
     if independent:assert report['total_rows']==independent['rows'], 'Independent row total mismatch'
@@ -102,3 +110,4 @@ finally:
         except Exception:
             host.kill();host.wait()
     log.close()
+    if os.name=="nt":ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)

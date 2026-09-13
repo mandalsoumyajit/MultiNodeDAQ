@@ -23,6 +23,9 @@ static uint32_t submitted;
 // Slot cursors remain valid when the unsigned production counters wrap.
 static unsigned producer_slot,consumer_slot,submitted_slot;
 static volatile uint64_t timer_dropped, queue_dropped;
+static volatile uint32_t peak_buffer_rows;
+static uint64_t max_ack_wait_us, max_loop_gap_us;
+static uint32_t tcp_write_mem_errors;
 static volatile uint64_t next_sample, dropped;
 static volatile bool sampling;
 static uint64_t epoch, epoch_first;
@@ -68,7 +71,8 @@ static bool produce(struct repeating_timer *timer){
         uint32_t code=(uint32_t)((first*3+i+MND_SEED)&0xffffff)-8388608u;
         put(b->bytes+i*3,code,3);
     }
-    producer_slot=(producer_slot+1)%SLOTS;__dmb();produced++;return true;
+    producer_slot=(producer_slot+1)%SLOTS;__dmb();produced++;
+    uint32_t buffered=(produced-consumed)*ROWS;if(buffered>peak_buffer_rows)peak_buffer_rows=buffered;return true;
 }
 static void enqueue(uint16_t kind,uint64_t first,const char *json){
     if(qhead-qtail==16){broken=true;return;}
@@ -77,7 +81,12 @@ static void enqueue(uint16_t kind,uint64_t first,const char *json){
 }
 static void status(void){
     uint32_t buffered;uint64_t loss,n=snapshot(&buffered,&loss);char j[768];
-    snprintf(j,sizeof j,"{\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\",\"buffer_rows\":%"PRIu32",\"dropped_rows\":\"%"PRIu64"\"}",state,n,buffered,loss);
+    uint32_t irq=save_and_disable_interrupts();
+    uint64_t timer_loss=timer_dropped,queue_loss=queue_dropped;uint32_t peak=peak_buffer_rows;
+    restore_interrupts(irq);
+    uint64_t wait=flight_head!=flight_tail?time_us_64()-flight_started:0;
+    if(wait>max_ack_wait_us)max_ack_wait_us=wait;
+    snprintf(j,sizeof j,"{\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\",\"buffer_rows\":%"PRIu32",\"dropped_rows\":\"%"PRIu64"\",\"diagnostics\":{\"timer_dropped\":\"%"PRIu64"\",\"queue_dropped\":\"%"PRIu64"\",\"peak_buffer_rows\":%"PRIu32",\"max_ack_wait_us\":\"%"PRIu64"\",\"max_loop_gap_us\":\"%"PRIu64"\",\"tcp_write_mem_errors\":%"PRIu32",\"wifi_link\":%d}}",state,n,buffered,loss,timer_loss,queue_loss,peak,max_ack_wait_us,max_loop_gap_us,tcp_write_mem_errors,cyw43_tcpip_link_status(&cyw43_state,CYW43_ITF_STA));
     enqueue(3,n,j);
 }
 static bool decimal(const cJSON *v,uint64_t *n){
@@ -166,7 +175,10 @@ static err_t receive(void *arg,struct tcp_pcb *t,struct pbuf *p,err_t err){
     tcp_recved(t,p->tot_len);pbuf_free(p);return ERR_OK;
 }
 static err_t sent(void *arg,struct tcp_pcb *t,u16_t len){
-    (void)arg;(void)t;size_t acknowledged=len;flight_started=time_us_64();
+    (void)arg;(void)t;size_t acknowledged=len;
+    uint64_t now=time_us_64(),wait=now-flight_started;
+    if(flight_head!=flight_tail&&wait>max_ack_wait_us)max_ack_wait_us=wait;
+    flight_started=now;
     while(acknowledged){
         if(flight_tail==flight_head){broken=true;return ERR_OK;}
         flight *f=&flights[flight_tail%FLIGHTS];
@@ -209,7 +221,7 @@ static void network(void){
     if(flight_head!=flight_tail&&time_us_64()-flight_started>10000000){broken=true;return;}
     if(tx_written<tx_len){
         size_t n=tx_len-tx_written;if(n>tcp_sndbuf(pcb))n=tcp_sndbuf(pcb);
-        if(n){err_t e=tcp_write(pcb,tx+tx_written,(u16_t)n,TCP_WRITE_FLAG_COPY);if(e==ERR_OK){tx_written+=n;tcp_output(pcb);}else if(e!=ERR_MEM)broken=true;}
+        if(n){err_t e=tcp_write(pcb,tx+tx_written,(u16_t)n,TCP_WRITE_FLAG_COPY);if(e==ERR_OK){tx_written+=n;tcp_output(pcb);}else if(e==ERR_MEM)tcp_write_mem_errors++;else broken=true;}
     }
 }
 int main(void){
@@ -231,9 +243,11 @@ int main(void){
     cyw43_arch_enable_sta_mode();
     cyw43_wifi_pm(&cyw43_state,CYW43_NO_POWERSAVE_MODE);
     cyw43_arch_wifi_connect_async(MND_SSID,MND_PASSWORD,CYW43_AUTH_WPA2_AES_PSK);
-    uint64_t wifi_retry=time_us_64()+30000000;
+    uint64_t wifi_retry=time_us_64()+30000000,last_loop=time_us_64();
     while(true){
         cyw43_arch_poll();uint64_t now=time_us_64();
+        if(sampling&&now-last_loop>max_loop_gap_us)max_loop_gap_us=now-last_loop;
+        last_loop=now;
         int link=cyw43_tcpip_link_status(&cyw43_state,CYW43_ITF_STA);
         if(pcb&&!connected&&now-connect_started>5000000)broken=true;
         if(broken||(connected&&link!=CYW43_LINK_UP)){

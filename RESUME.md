@@ -1,3 +1,19 @@
+## Diagnostic recording analyzed - 2026-09-13
+
+Read-only full byte/CRC/counter scan found 297,057,024 saved XYZ rows (~99m06s), zero counter/CRC errors; all 12 finalized segment hashes match. Two final segments have valid record boundaries but no footer. Queue drops total 140,800/94,208 with zero timer drops and ~2.5s ACK stalls. Losses began before the final screen-off transition, so it is not the sole established trigger. See [analysis](software/docs/stage5-diagnostic-repeat-analysis.md). Originals remain untouched; no full two-hour or semantic verification pass is claimed.
+
+## Diagnostic run interrupted by PC freeze - 2026-09-13
+
+The PC rebooted uncleanly at 11:44; last intact diagnostic metrics are 11:02:10 EDT, about 99 minutes into the run. It is no longer running. status.json is zero-filled; preserve originals. See [PC freeze investigation](software/docs/pc-freeze-investigation-20260913.md). Both recent Event 41 records have Modern Standby in progress. Specific root cause remains unproven; administrator SleepStudy/dump analysis is needed. Prior launch notes below are historical.
+
+## Historical launch: diagnostic two-board repeat - 2026-09-13
+
+Instrumented firmware is flashed on both boards. A two-hour Wi-Fi repeat started at 09:23:15 EDT, due 11:23:15 EDT plus drain/verification. Ethernet is unavailable; boards remain on USB power. At 30 seconds both boards had zero missing rows, timer drops, queue drops and counter errors. Use `software/.artifacts/stage5/active-diagnostic-test.json`, not the older battery pointer, to inspect this run. See [diagnostic repeat](software/docs/stage5-diagnostic-repeat.md) for build hash, telemetry semantics, validation and limitations. Do not reset boards or start another receiver during measurement. The process holds a temporary system-awake request.
+
+## Two-board measurement finished; drop investigation
+
+The two-hour recording finalized, but is not lossless: source/receiver losses are 30,464 and 29,184 rows. At investigation time, full verification was still running; inspect the active run status/report before claiming a final verification result. Recorded STATUS frames show both source buffers reaching capacity during the main loss. See [drop investigation](software/docs/stage5-drop-investigation.md) for exact gaps, evidence, attribution limits and the next experiment. The running-test notes below are historical launch context.
+
 ## GUI aliases and IP display (2026-09-13)
 
 Implemented editable local aliases keyed by permanent unit ID, with separate live/last IP and TCP port display. Use **Edit alias**; blank restores the firmware label. Preferences live in `%LOCALAPPDATA%\MultiNodeDAQ\aliases.json`. Operator instructions are in `software/docs/stage4-operation.md`.
