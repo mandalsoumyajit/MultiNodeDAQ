@@ -14,5 +14,18 @@
   "solution_build": "pass",
   "board": "895DFE4DF2C37EC4",
   "date": "2026-09-14",
-  "uf2_sha256": "854189118B3E4F9CB84F23F766630B08BAABBC257FBB0A0D627CA1AA87855430"
+  "uf2_sha256": "854189118B3E4F9CB84F23F766630B08BAABBC257FBB0A0D627CA1AA87855430",
+  "second_board_deployment": {
+    "flash_readback": "pass",
+    "source_tree": "clean",
+    "usb_boot": "pass",
+    "flash_backup_verification": "pass",
+    "date": "2026-09-14",
+    "source_commit": "23142600d523e09137c4bf4bcf7332544a9c619b",
+    "address": "192.168.1.178:45230",
+    "hardware_streaming": "not tested",
+    "board": "1A0D3F9F4FDF64D9",
+    "uf2_sha256": "60EDCE26C6DEF8DE87439D33EBE875BE42967199BD3BEBD5E72B9AF16426DF19",
+    "transport": "listen"
+  }
 }

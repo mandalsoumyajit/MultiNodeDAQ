@@ -1,6 +1,6 @@
 # Resume development — 2026-09-14
 
-Latest firmware update, September 14: output retries, bounded send servicing and stall history are implemented and native-tested. Board 895DFE4DF2C37EC4 was flashed and boot-checked; the new streaming test is blocked by this PC's VPN route. The second board retains the previous build. See [implementation and validation](software/docs/stage5-tcp-pump-update.md).
+Latest firmware update, September 14: output retries, bounded send servicing and stall history are implemented and native-tested. Board 895DFE4DF2C37EC4 was flashed and boot-checked; the new streaming test is blocked by this PC's VPN route. The second board 1A0D3F9F4FDF64D9 is also flashed and boot-checked, using clean implementation commit 23142600d523; its observed address is 192.168.1.178:45230. See [implementation and validation](software/docs/stage5-tcp-pump-update.md).
 
 ## Current checkpoint
 

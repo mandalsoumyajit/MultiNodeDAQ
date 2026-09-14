@@ -76,3 +76,23 @@ Then exercise controlled receiver backpressure shorter than retention, followed
 by longer interruptions with explicit loss accounting and the two-board gate.
 The previous multi-second stalls remain unexplained until measured with this
 build; implementation and flash success do not establish their elimination.
+## Second-board deployment — 2026-09-14
+
+After committing the implementation as 23142600d523e09137c4bf4bcf7332544a9c619b,
+firmware was rebuilt from that clean source tree and flashed to the second
+Pico, serial 1A0D3F9F4FDF64D9 (COM4 on this computer).
+
+- Verified 4 MiB pre-update backup saved to ignored private artifacts.
+- Firmware build succeeded; flash readback verification passed.
+- USB confirms build 23142600d523, listen mode on TCP 45230, idle state and
+  DHCP address 192.168.1.178 after association.
+- UF2 SHA-256:
+  60EDCE26C6DEF8DE87439D33EBE875BE42967199BD3BEBD5E72B9AF16426DF19.
+- Local logs: software/.artifacts/stage5/second-pico-pump-backup.log,
+  second-pico-pump-flash.log and second-pico-pump-usb.log in the same directory.
+
+Both boards now have the TCP pump changes. The first board retains the earlier
+a80212aef673-dirty build documented above; the second has the clean-commit build.
+They share the implemented source behavior but have different embedded build
+identities and UF2 hashes. No new streaming or endurance result is claimed.
+The PC's previously identified VPN routing limitation was not changed.
