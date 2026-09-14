@@ -13,6 +13,7 @@
 #include "lwip/tcp.h"
 #include "vendor/cjson/cJSON.h"
 #include "private_config.h"
+#include "tcp_pump.h"
 #define ROWS 256u
 #define SLOTS 160u
 #define PAYLOAD (ROWS*9u)
@@ -35,15 +36,16 @@ static uint64_t sequence, incoming_sequence;
 static bool incoming_seen, connected, ready, broken;
 static struct tcp_pcb *pcb;
 static uint8_t tx[PAYLOAD+100], rx[4096];
-static size_t tx_len, tx_written, rx_used;
+static size_t tx_len, rx_used;
+static mnd_pump pump;
 #define FLIGHTS 64u
 typedef struct { size_t remaining; bool data; } flight;
 static flight flights[FLIGHTS];
 static unsigned flight_head,flight_tail;
 static bool tx_data;
-static uint64_t flight_started, reconnect_at, last_status, last_usb;
+static uint64_t reconnect_at, last_status, last_usb;
 static uint32_t crc_table[256];
-typedef struct { uint16_t kind; uint64_t first; char json[768]; } control;
+typedef struct { uint16_t kind; uint64_t first; char json[1536]; } control;
 static control queue[16];
 static unsigned qhead,qtail;
 static uint64_t connect_started;
@@ -79,14 +81,73 @@ static void enqueue(uint16_t kind,uint64_t first,const char *json){
     control *c=&queue[qhead++%16];c->kind=kind;c->first=first;
     snprintf(c->json,sizeof c->json,"%s",json);
 }
+// A bounded transition history survives reconnection. Flags describe observed
+// state, not a diagnosis: 1=sndbuf empty, 2=peer window zero, 4=unsent,
+// 8=unacked, 16=ledger full, 32=output retry, 64=ACK stalled, 128=queue stalled.
+typedef struct {
+    uint64_t at; uint32_t flags, sndbuf, wnd, cwnd;
+    uint16_t qlen; uint8_t retries; int output_error;
+} stall_event;
+#define STALL_EVENTS 4u
+static stall_event stall_history[STALL_EVENTS];
+static unsigned stall_count, stall_flags;
+static uint64_t queue_wait_at, max_queue_wait_us;
+static void observe_transport(uint64_t now) {
+    uint64_t wait=mnd_pump_ack_wait(&pump,now);
+    if(wait>max_ack_wait_us)max_ack_wait_us=wait;
+    bool pending=produced!=submitted || pump.length;
+    uint64_t queue_wait=0;
+    if(pending){
+        if(!queue_wait_at)queue_wait_at=now;
+        if(pump.last_queued_at>queue_wait_at)queue_wait_at=pump.last_queued_at;
+        queue_wait=now-queue_wait_at;
+        if(queue_wait>max_queue_wait_us)max_queue_wait_us=queue_wait;
+    }else queue_wait_at=0;
+    unsigned flags=0;
+    if(wait>=100000 || queue_wait>=100000){
+        flags=(!tcp_sndbuf(pcb)?1u:0u)|(!pcb->snd_wnd?2u:0u)|
+          (pcb->unsent?4u:0u)|(pcb->unacked?8u:0u)|
+          (flight_head-flight_tail==FLIGHTS?16u:0u)|(pump.output_pending?32u:0u)|
+          (wait>=100000?64u:0u)|(queue_wait>=100000?128u:0u);
+    }
+    if(flags!=stall_flags){
+        stall_flags=flags;
+        stall_history[stall_count++%STALL_EVENTS]=(stall_event){
+          now,flags,tcp_sndbuf(pcb),pcb->snd_wnd,pcb->cwnd,
+          tcp_sndqueuelen(pcb),pcb->nrtx,pump.last_output_error};
+    }
+}
 static void status(void){
-    uint32_t buffered;uint64_t loss,n=snapshot(&buffered,&loss);char j[768];
+    uint32_t buffered;uint64_t loss,n=snapshot(&buffered,&loss);static char j[1536],events[640];
     uint32_t irq=save_and_disable_interrupts();
     uint64_t timer_loss=timer_dropped,queue_loss=queue_dropped;uint32_t peak=peak_buffer_rows;
     restore_interrupts(irq);
-    uint64_t wait=flight_head!=flight_tail?time_us_64()-flight_started:0;
-    if(wait>max_ack_wait_us)max_ack_wait_us=wait;
-    snprintf(j,sizeof j,"{\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\",\"buffer_rows\":%"PRIu32",\"dropped_rows\":\"%"PRIu64"\",\"diagnostics\":{\"timer_dropped\":\"%"PRIu64"\",\"queue_dropped\":\"%"PRIu64"\",\"peak_buffer_rows\":%"PRIu32",\"max_ack_wait_us\":\"%"PRIu64"\",\"max_loop_gap_us\":\"%"PRIu64"\",\"tcp_write_mem_errors\":%"PRIu32",\"wifi_link\":%d}}",state,n,buffered,loss,timer_loss,queue_loss,peak,max_ack_wait_us,max_loop_gap_us,tcp_write_mem_errors,cyw43_tcpip_link_status(&cyw43_state,CYW43_ITF_STA));
+    size_t used=0;
+    unsigned count=stall_count<STALL_EVENTS?stall_count:STALL_EVENTS;
+    for(unsigned i=0;i<count;i++){
+        const stall_event *e=&stall_history[(stall_count-count+i)%STALL_EVENTS];
+        int wrote=snprintf(events+used,sizeof events-used,
+          "%s[\"%"PRIu64"\",%u,%"PRIu32",%"PRIu32",%"PRIu32",%u,%u,%d]",
+          i?",":"",e->at,(unsigned)e->flags,e->sndbuf,e->wnd,e->cwnd,e->qlen,e->retries,e->output_error);
+        if(wrote<0||(size_t)wrote>=sizeof events-used){broken=true;return;}
+        used+=(size_t)wrote;
+    }
+    if(!count)events[0]=0;
+    int size=snprintf(j,sizeof j,
+      "{\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\",\"buffer_rows\":%"PRIu32",\"dropped_rows\":\"%"PRIu64"\","
+      "\"diagnostics\":{\"timer_dropped\":\"%"PRIu64"\",\"queue_dropped\":\"%"PRIu64"\",\"peak_buffer_rows\":%"PRIu32","
+      "\"max_ack_wait_us\":\"%"PRIu64"\",\"max_loop_gap_us\":\"%"PRIu64"\",\"tcp_write_mem_errors\":%"PRIu32",\"wifi_link\":%d,"
+      "\"prepared_frames\":\"%"PRIu64"\",\"queued_bytes\":\"%"PRIu64"\",\"acked_bytes\":\"%"PRIu64"\","
+      "\"max_queue_wait_us\":\"%"PRIu64"\",\"output_errors\":\"%"PRIu64"\",\"output_calls\":\"%"PRIu64"\","
+      "\"sndbuf\":%u,\"snd_wnd\":%"PRIu32",\"cwnd\":%"PRIu32",\"snd_queuelen\":%u,\"nrtx\":%u,"
+      "\"unsent\":%s,\"unacked\":%s,\"stall_count\":%u,\"stall_events\":[%s]}}",
+      state,n,buffered,loss,timer_loss,queue_loss,peak,max_ack_wait_us,max_loop_gap_us,
+      tcp_write_mem_errors,cyw43_tcpip_link_status(&cyw43_state,CYW43_ITF_STA),
+      pump.prepared_frames,pump.queued_bytes,pump.acked_bytes,max_queue_wait_us,
+      pump.output_errors,pump.output_calls,(unsigned)tcp_sndbuf(pcb),(uint32_t)pcb->snd_wnd,
+      (uint32_t)pcb->cwnd,(unsigned)tcp_sndqueuelen(pcb),(unsigned)pcb->nrtx,
+      pcb->unsent?"true":"false",pcb->unacked?"true":"false",stall_count,events);
+    if(size<0||(size_t)size>=sizeof j){broken=true;return;}
     enqueue(3,n,j);
 }
 static bool decimal(const cJSON *v,uint64_t *n){
@@ -176,9 +237,9 @@ static err_t receive(void *arg,struct tcp_pcb *t,struct pbuf *p,err_t err){
 }
 static err_t sent(void *arg,struct tcp_pcb *t,u16_t len){
     (void)arg;(void)t;size_t acknowledged=len;
-    uint64_t now=time_us_64(),wait=now-flight_started;
-    if(flight_head!=flight_tail&&wait>max_ack_wait_us)max_ack_wait_us=wait;
-    flight_started=now;
+    uint64_t now=time_us_64();
+    if(!mnd_pump_ack(&pump,now,len)){broken=true;return ERR_OK;}
+    if(pump.max_ack_wait_us>max_ack_wait_us)max_ack_wait_us=pump.max_ack_wait_us;
     while(acknowledged){
         if(flight_tail==flight_head){broken=true;return ERR_OK;}
         flight *f=&flights[flight_tail%FLIGHTS];
@@ -208,21 +269,42 @@ static void make_frame(uint16_t kind,uint64_t first,const void *payload,size_t l
     put(tx+68,25000,4);put(tx+72,1,4);put(tx+88,len,4);
     if(kind==2){put(tx+64,ROWS,4);put(tx+84,3,2);put(tx+86,1,2);}
     memcpy(tx+96,payload,len);put(tx+96+len,crc(tx,96+len),4);
-    tx_len=100+len;tx_written=0;tx_data=kind==2;
-    if(flight_head==flight_tail)flight_started=time_us_64();
+    tx_len=100+len;tx_data=kind==2;
     flights[flight_head++%FLIGHTS]=(flight){.remaining=tx_len,.data=tx_data};
 }
+static uint64_t pump_now(void *ctx){(void)ctx;return time_us_64();}
+static bool pump_prepare(void *ctx,const uint8_t **data,size_t *length){
+    (void)ctx;
+    if(flight_head-flight_tail==FLIGHTS)return false;
+    if(qtail!=qhead){
+        control *c=&queue[qtail++%16];make_frame(c->kind,c->first,c->json,strlen(c->json));
+    }else if(ready&&produced!=submitted){
+        __dmb();block *b=&ring[submitted_slot];make_frame(2,b->first,b->bytes,PAYLOAD);
+    }else return false;
+    *data=tx;*length=tx_len;return true;
+}
+static size_t pump_space(void *ctx){(void)ctx;return tcp_sndbuf(pcb);}
+static int pump_write(void *ctx,const uint8_t *data,size_t length){
+    (void)ctx;err_t e=tcp_write(pcb,data,(u16_t)length,TCP_WRITE_FLAG_COPY);
+    if(e==ERR_OK)return 0;
+    if(e==ERR_MEM){tcp_write_mem_errors++;return 1;}
+    return -1;
+}
+static int pump_output(void *ctx){(void)ctx;return tcp_output(pcb);}
+static bool pump_unsent(void *ctx){(void)ctx;return pcb->unsent!=NULL;}
+static void pump_complete(void *ctx){
+    (void)ctx;
+    if(tx_data){submitted++;submitted_slot=(submitted_slot+1)%SLOTS;}
+    tx_len=0;
+}
+static const mnd_pump_ops pump_ops={
+    pump_now,pump_prepare,pump_space,pump_write,pump_output,pump_unsent,pump_complete
+};
 static void network(void){
-    if(tx_len&&tx_written==tx_len){if(tx_data){submitted++;submitted_slot=(submitted_slot+1)%SLOTS;}tx_len=0;}
-    if(!tx_len&&flight_head-flight_tail<FLIGHTS){
-        if(qtail!=qhead){control *c=&queue[qtail++%16];make_frame(c->kind,c->first,c->json,strlen(c->json));}
-        else if(ready&&produced!=submitted){__dmb();block *b=&ring[submitted_slot];make_frame(2,b->first,b->bytes,PAYLOAD);}
-    }
-    if(flight_head!=flight_tail&&time_us_64()-flight_started>10000000){broken=true;return;}
-    if(tx_written<tx_len){
-        size_t n=tx_len-tx_written;if(n>tcp_sndbuf(pcb))n=tcp_sndbuf(pcb);
-        if(n){err_t e=tcp_write(pcb,tx+tx_written,(u16_t)n,TCP_WRITE_FLAG_COPY);if(e==ERR_OK){tx_written+=n;tcp_output(pcb);}else if(e==ERR_MEM)tcp_write_mem_errors++;else broken=true;}
-    }
+    mnd_pump_run(&pump,&pump_ops,NULL);
+    uint64_t now=time_us_64();observe_transport(now);
+    if(pump.fatal||mnd_pump_ack_wait(&pump,now)>10000000||
+       (queue_wait_at&&now-queue_wait_at>10000000))broken=true;
 }
 int main(void){
     stdio_init_all();
@@ -252,7 +334,8 @@ int main(void){
         if(pcb&&!connected&&now-connect_started>5000000)broken=true;
         if(broken||(connected&&link!=CYW43_LINK_UP)){
             if(pcb){tcp_arg(pcb,NULL);tcp_err(pcb,NULL);tcp_abort(pcb);pcb=NULL;}
-            connected=ready=broken=false;tx_len=rx_used=0;qhead=qtail=0;flight_head=flight_tail=0;submitted=consumed;submitted_slot=consumer_slot;incoming_seen=false;reconnect_at=now+2000000;
+            connected=ready=broken=false;tx_len=rx_used=0;qhead=qtail=0;flight_head=flight_tail=0;submitted=consumed;submitted_slot=consumer_slot;incoming_seen=false;
+            memset(&pump,0,sizeof pump);queue_wait_at=0;stall_flags=0;reconnect_at=now+2000000;
         }
         if(!MND_LISTEN&&link==CYW43_LINK_UP&&!pcb&&now>=reconnect_at){
             ip_addr_t addr;if(ipaddr_aton(MND_HOST,&addr)){
@@ -261,8 +344,8 @@ int main(void){
             }reconnect_at=now+5000000;
         }
         if(link<CYW43_LINK_NOIP&&now>=wifi_retry){cyw43_arch_wifi_connect_async(MND_SSID,MND_PASSWORD,CYW43_AUTH_WPA2_AES_PSK);wifi_retry=now+30000000;}
-        if(connected){if(ready&&now-last_status>=1000000){status();last_status=now;}network();}
-        if(now-last_usb>=1000000){
+        if(connected){network();if(!broken&&ready&&now-last_status>=1000000){status();last_status=now;}}
+        if(now-last_usb>=1000000 && produced-consumed<4){
             last_usb=now;if(stdio_usb_connected())printf("{\"build\":\"%s\",\"receiver\":\"%s\",\"port\":%u}\n",MND_BUILD,MND_LISTEN?"listen":MND_HOST,(unsigned)MND_PORT);if(stdio_usb_connected())printf("{\"ip\":\"%s\",\"pcb_state\":%d}\n",ip4addr_ntoa(netif_ip4_addr(&cyw43_state.netif[0])),pcb?(int)pcb->state:-1);uint32_t buffered;uint64_t loss,n=snapshot(&buffered,&loss);
             if(stdio_usb_connected())printf("{\"firmware\":\"pico-counter\",\"wifi_link\":%d,\"tcp\":%s,\"ready\":%s,\"state\":\"%s\",\"next_sample\":\"%"PRIu64"\",\"buffer_rows\":%"PRIu32",\"dropped_rows\":\"%"PRIu64"\"}\n",link,connected?"true":"false",ready?"true":"false",state,n,buffered,loss);
             if(stdio_usb_connected())printf("{\"timer_dropped\":\"%"PRIu64"\",\"queue_dropped\":\"%"PRIu64"\"}\n",timer_dropped,queue_dropped);

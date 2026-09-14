@@ -1,0 +1,18 @@
+{
+  "hardware_streaming": "blocked: no TCP connection; PC route selects VPN interface",
+  "hardware_endurance": "not run",
+  "usb_boot_wifi_listen": "pass",
+  "firmware_build": "pass",
+  "flash_readback": "pass",
+  "native_pump_tests": "pass",
+  "source_sha256": {
+    "software/firmware/pico_synthetic/lwipopts.h": "849FCD690EAF0024D79075EABCF4C25481A4C8BFA35F07A914A9DCBF3AA2EA97",
+    "software/firmware/pico_synthetic/tcp_pump.h": "0FCFDC8352F530EB1D32C26411469972F7E62E2472073E0F03DE7E39920A2623",
+    "software/firmware/pico_synthetic/stream.c": "E56F66351A173CF0CD80A0B58970A04A25CB2BB59CB26A13766A01BBA4DBDB0F",
+    "software/firmware/pico_synthetic/CMakeLists.txt": "EEEC36F676E741ECE53349611351520A0214B024248EDDD9953DB086D554FF6F"
+  },
+  "solution_build": "pass",
+  "board": "895DFE4DF2C37EC4",
+  "date": "2026-09-14",
+  "uf2_sha256": "854189118B3E4F9CB84F23F766630B08BAABBC257FBB0A0D627CA1AA87855430"
+}

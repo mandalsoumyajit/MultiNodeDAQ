@@ -1,6 +1,6 @@
-# MultiNodeDAQ software: Stages 0–3
+# MultiNodeDAQ software: Stages 0–4 implemented; Stage 5 in progress
 
-C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. Stage 3 adds live Python SCF analysis and HDF5 export; Stage 4 adds the WPF GUI; Pico firmware remains Stage 5.
+C#/.NET acquisition foundation with an independent Python interface. This directory contains **binary contracts, codecs, golden fixtures, a multi-unit TCP simulator and a working headless receiver and recorder**. Stage 2 adds recording, verification and range replay; its two-hour qualification passed with all 144 recording segments independently verified. Stage 3 adds live Python SCF analysis and HDF5 export; Stage 4 adds the WPF GUI; Stage 5 Pico counter firmware now runs on two boards, with hardware endurance qualification still unmet. See [current results and next steps](docs/implementation-status.md).
 
 ## Quick verification (Windows x64)
 
@@ -41,7 +41,7 @@ The C# test project is a dependency-free executable harness, not an xUnit/MSTest
 - `src/MultiNodeDAQ.Core`: deterministic synthetic signals and the command state machine.
 - `src/MultiNodeDAQ.Acquisition`: multiple TCP clients, bounded stream parsing, session state, continuity checks and command acknowledgments.
 - `src/MultiNodeDAQ.Host` and `src/MultiNodeDAQ.Simulator`: runnable console applications.
-- Desktop remains a later stage; [Python live IPC and analysis](docs/stage3-operation.md) are available.
+- The WPF desktop is implemented (Stage 4); [Python live IPC and analysis](docs/stage3-operation.md) are available.
 
 Encoders/decoders enforce binary layout, sample bounds and strict JSON syntax; Stage 1 handlers additionally enforce mandatory metadata schemas, state transitions and command acknowledgments. Cross-record commit semantics require the Stage 2 recorder. That separation is explicit: a syntactically valid object is not authorization to execute a command.
 
@@ -87,7 +87,7 @@ See [Stage 1 design and operation](docs/stage1-operation.md), [Stage 1 test repo
 
 ## Deployment and releases
 
-See [deployment and version control](../Deployment_and_Version_Control.md) for the proposed self-contained Windows package, Git/release workflow, optional Python bundle, recording provenance and upgrade/rollback policy. Packaging begins in the next release-foundation increment; Stage 1 source tests do not yet establish portable deployment.
+See [deployment and version control](../Deployment_and_Version_Control.md) for the proposed self-contained Windows package, Git/release workflow, optional Python bundle, recording provenance and upgrade/rollback policy. Self-contained Stage 4 packaging and a development-machine install/launch check passed; clean-machine offline qualification remains Stage 6.
 
 ## Stage 2 recording
 

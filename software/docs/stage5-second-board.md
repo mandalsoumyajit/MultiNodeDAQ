@@ -1,5 +1,7 @@
 # Second Pico programmed — 2026-09-13
 
+**Follow-up, September 14:** both boards subsequently streamed concurrently, and both received the instrumented firmware. Endurance qualification remains unmet. See [current status](implementation-status.md) and [diagnostic build/result](stage5-diagnostic-repeat.md). The programming record below preserves the initial firmware and observations.
+
 The second Pico 2 W, board ID **1A0D3F9F4FDF64D9**, was programmed with the
 exact same UF2 used in the first board's successful lossless smoke test.
 

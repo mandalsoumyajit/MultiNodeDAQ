@@ -8,7 +8,7 @@ Connect one board in BOOTSEL mode. Inspect it with picotool info -a; target an e
 
 Keep firmware, build scripts and test reports in Git; firmware binaries, flash backups, serial captures and future private Wi-Fi configuration belong in ignored local artifacts. Use explicit little-endian encoders for protocol v1; never send native C structures directly.
 
-Remaining Stage 5 work: shared wire fixtures, hardware-paced synthetic XYZ producer, finite queues and overflow accounting, Wi-Fi/TCP command and streaming integration, two-board endurance and disconnection/recovery tests.
+The diagnostic target above is the initial bring-up program. The stream target below now implements hardware-paced counters, finite queues, Wi-Fi/TCP commands and streaming on two boards. See [current status](../../docs/implementation-status.md) for evidence and remaining Stage 5 work.
 
 ## Counter transport prototype (Stage 5, in progress)
 
@@ -16,7 +16,7 @@ stream.c uses Pico SDK 2.2.0 and lwIP raw TCP polling. The initial fixed configu
 
 A hardware timer produces 256-row blocks every 10.24 ms. The 160-block RAM ring holds 40,960 rows (1.6384 seconds). Production advances counters even when the ring overflows. STATUS reports dropped rows; DATA indices expose missing intervals. Frames are pipelined through a bounded 64-entry acknowledgement ledger. Each block remains buffered until its full frame is TCP-acknowledged. This is not a durable recording commit. Power loss discards buffered data.
 
-Unit identity derives from the board ID; a random acquisition session is created on boot. Reconnect preserves both session and counters. A fresh receiver cannot yet recover configuration for an already-sampling Pico; reboot the Pico in that case. Additional modes, configurable rates, fault-injection tests and a two-board endurance test remain outstanding.
+Unit identity derives from the board ID; a random acquisition session is created on boot. Reconnect preserves both session and counters. A fresh receiver cannot yet recover configuration for an already-sampling Pico; reboot the Pico in that case. Additional modes, configurable rates and fault-injection qualification remain outstanding. A two-hour two-board recording finalized with losses and incomplete independent verification; an instrumented repeat was interrupted by a PC freeze. Neither satisfies endurance qualification.
 
 Commands use vendored cJSON v1.7.19 (MIT; vendor/cjson/LICENSE). Limits: 4096-byte control frames, 2048-byte JSON payloads, nesting depth 16, duplicate-key rejection, eight exact-payload cached replies. Expired request IDs never execute again.
 
@@ -55,3 +55,58 @@ USB reports build/destination, TCP state, total loss, timer loss and queue loss.
 The larger sample ring uses a 16-packet receive pool; the linker map must be
 reviewed after memory changes. Bursts longer than available buffer capacity can
 still drop data; this is not a lossless endurance guarantee.
+
+## Current diagnostic baseline — 2026-09-14
+
+Both boards were flashed with the [instrumented build](../../docs/stage5-diagnostic-repeat.md). Recorded STATUS includes separate timer/queue drops, actual peak ring occupancy, maximum ACK-progress wait, maximum sampling-loop interval, TCP write ERR_MEM attempts and Wi-Fi link state.
+
+The repeat showed zero timer drops, explicit queue losses and roughly 2.5-second ACK-progress stalls. Keep the 40,960-row (1.6384-second) ring and nominal rate for controlled diagnosis. Overflow identifies the immediate loss mechanism; it does not establish an inherently insufficient buffer. Investigate firmware/lwIP send/ACK handling alongside receiver/TCP and PC/AP/radio behavior before choosing a capacity change. See [analysis](../../docs/stage5-diagnostic-repeat-analysis.md).
+
+## TCP pump update — 2026-09-14
+
+The send pump in tcp_pump.h retries pending tcp_output independently of new
+tcp_write acceptance, with a 1 ms retry interval after output errors. It also
+services lwIP unsent data at bounded intervals. This does not force packets
+past TCP congestion/receiver windows or replace lwIP retransmission policy.
+Accepted bytes are never submitted twice. A pump call handles at most 8 KiB,
+16 write iterations and a 500 us elapsed-time budget checked between calls;
+a single SDK callback can exceed that budget. Radio polling resumes each loop.
+
+The polling context exclusively owns TCP, frame preparation and ACK callbacks.
+The next main-loop pump runs immediately after radio/ACK processing. USB stdout
+has zero wait timeout and diagnostics are skipped with four or more source
+blocks buffered. USB lines are best-effort and may be incomplete; recorded
+STATUS remains the authoritative diagnostic path. The 25 krow/s rate, 256-row
+blocks, 160-slot source ring and lwIP buffer configuration are unchanged.
+
+Additional STATUS diagnostics:
+
+- prepared_frames counts frames constructed; queued_bytes counts bytes accepted
+  by tcp_write; acked_bytes counts bytes reported by tcp_sent. These include
+  control traffic and reset on TCP reconnection.
+- max_ack_wait_us now measures time without ACK progress only while accepted
+  bytes remain outstanding. It no longer starts at frame construction, so its
+  semantics differ from the earlier diagnostic build. Acceptance is not proof
+  of physical transmission, and ACK is not durable disk commit.
+- max_queue_wait_us measures a pending DATA backlog without new accepted bytes.
+  Maximum queue/ACK waits, source drops, loop maximum and stall history survive
+  reconnects within a boot. output_calls/output_errors reset per connection.
+- sndbuf, snd_wnd, cwnd, snd_queuelen, nrtx, unsent and unacked snapshot lwIP
+  state. nrtx is lwIP's current retransmission state, not a lifetime total.
+- stall_count counts observed state transitions after 100 ms without ACK or
+  DATA queueing progress, including recovery transitions. stall_events retains
+  the latest four entries, oldest first. Each compact entry is:
+  [boot_us_string, flags, sndbuf, peer_window, congestion_window,
+  send_queue_pbufs, current_retransmissions, last_output_error].
+- Flag bits: 1 send buffer empty; 2 peer window zero; 4 unsent segments;
+  8 unacknowledged segments; 16 frame ledger full; 32 output retry pending;
+  64 ACK stall; 128 DATA queueing stall. Flags zero marks recovery.
+  These are observations, not causal classifications. A rapidly changing stall
+  can overwrite older entries before the next one-second STATUS frame.
+
+Control queue JSON capacity is 1536 bytes; STATUS construction checks bounds.
+Its scratch buffers are static to avoid growing the small MCU stack. Detailed
+history is bounded; heap headroom must still be checked after future changes.
+
+See [native fault tests](tests/README.md). A short hardware smoke test does not
+establish that the previous two-board endurance stalls have been eliminated.

@@ -1,6 +1,8 @@
 # Two-board battery endurance run — 2026-09-13
 
-Status at launch: **running; no endurance pass claimed yet**.
+**Final outcome, updated September 14:** the two-hour recording finalized with 359,965,696 saved XYZ rows, but source/receiver losses were 30,464 and 29,184 rows. C# verification reported zero sample errors; independent Python verification timed out after 1,800 seconds and the harness failed. No complete independent verification or lossless endurance pass is claimed. See [drop investigation](stage5-drop-investigation.md), [verification follow-up](pc-freeze-investigation-20260913.md) and [current implementation status](implementation-status.md).
+
+The remaining text preserves launch conditions and harness usage. The run has ended.
 Both boards were reported by the user to be battery-powered.
 The receiver computer was on AC power, with AC idle sleep disabled by its
 existing power plan. No power, firewall or network-profile settings were changed.

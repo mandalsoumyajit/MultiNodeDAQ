@@ -8,11 +8,11 @@ The first application is a distributed triaxial magnetic-field detector. The arc
 
 ## Resume development
 
-For the current Stage 5 hardware checkpoint and setup on another computer, start with [RESUME.md](RESUME.md). The Pico joins Wi-Fi; the first end-to-end streaming test is still pending.
+For the current Stage 5 hardware checkpoint and setup on another computer, start with [RESUME.md](RESUME.md). Both Picos stream synthetic counters; smoke tests passed, but two-board endurance qualification remains unmet. See [current implementation status](software/docs/implementation-status.md).
 
 ## Current status
 
-Stages 0–3 are qualified with software simulators. The Stage 2 two-hour, sixteen-node recording run passed, including independent verification of all 144 segments: 2,879,978,240 XYZ rows with no missing samples or sample errors. See the [qualification report](software/docs/stage2-test-report.md). Stage 3 adds Python recording access, lossless HDF5 export, live SCF/PSD analysis, and runtime settings for the GUI. See [Python setup and operation](software/docs/stage3-operation.md). Stage 4 now provides the WPF operator GUI, replay controls, live diagnostics, selectable spectral settings and a self-contained Windows package with versioned per-user installation. Pico 2 W firmware remains Stage 5. Extended offline/field qualification remains Stage 6.
+Stages 0–3 are qualified with software simulators. The Stage 2 two-hour, sixteen-node recording run passed, including independent verification of all 144 segments: 2,879,978,240 XYZ rows with no missing samples or sample errors. See the [qualification report](software/docs/stage2-test-report.md). Stage 3 adds Python recording access, lossless HDF5 export, live SCF/PSD analysis, and runtime settings for the GUI. See [Python setup and operation](software/docs/stage3-operation.md). Stage 4 now provides the WPF operator GUI, replay controls, live diagnostics, selectable spectral settings and a self-contained Windows package with versioned per-user installation. Stage 5 Pico 2 W counter firmware is running on two boards; delivery stalls and a separate PC freeze prevented endurance qualification. Extended offline/field qualification remains Stage 6.
 
 The solution is `software/MultiNodeDAQ.slnx`, C# projects use `MultiNodeDAQ.*`, and the Python package is `multinodedaq`. The ELF-prefixed wire magic and `.elflog` format retain their existing v1 identifiers for compatibility. Local development is at `C:\dev\MultiNodeDAQ`.
 
@@ -44,4 +44,10 @@ Sensor transport currently assumes a trusted network and does not implement auth
 
 The Windows operator GUI is implemented: fleet status, recording controls, XYZ envelopes and C# diagnostics, optional spectral views/settings, replay and reports. See [operator guide](software/docs/stage4-operation.md) and [test results](software/docs/stage4-test-report.md).
 
-From the software directory, run scripts/demo-stage4.ps1 in PowerShell 7 after a Release build. Self-contained Windows x64 packaging and per-user versioned installation are available through scripts/package-stage4.ps1. Hardware firmware remains Stage 5; extended field and offline deployment qualification remains Stage 6.
+From the software directory, run scripts/demo-stage4.ps1 in PowerShell 7 after a Release build. Self-contained Windows x64 packaging and per-user versioned installation are available through scripts/package-stage4.ps1. Stage 5 hardware qualification is in progress; extended field and offline deployment qualification remains Stage 6.
+
+## Current hardware assessment — 2026-09-14
+
+The two-hour battery run finalized with source losses; independent Python verification timed out. The instrumented repeat ended after about 99 minutes in a PC freeze. Its saved-data scan found zero CRC/counter/order errors, but this was not a full semantic verification pass.
+
+The 1.6384-second source ring overflowed during approximately 2.5-second TCP ACK-progress stalls. This identifies the loss mechanism, not an inherently undersized buffer or the cause of the stalls. Keep the buffer as the diagnostic baseline and investigate receiver/TCP, PC/AP/radio and firmware behavior. See [results and next steps](software/docs/implementation-status.md).

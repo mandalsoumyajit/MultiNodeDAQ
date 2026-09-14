@@ -4,7 +4,7 @@
 
 The immediate loss mechanism is source-side buffering exhaustion during brief delivery stalls. The main event is directly evidenced by both boards reporting their full 40,960-row buffers while sampling continued. The smaller first-board event shows the same buffer buildup and is strongly consistent with overflow. The underlying cause of the delivery stalls is not established by this recording.
 
-The run is `software/.artifacts/stage5/two-board-20260913-070215`. The recorder finalized its manifest as complete, with 179,982,080 rows from 895DFE4DF2C37EC4 and 179,983,616 rows from 1A0D3F9F4FDF64D9. Complete means orderly recording finalization, not lossless acquisition. Full independent verification was still running when this investigation was written.
+The run is `software/.artifacts/stage5/two-board-20260913-070215`. The recorder finalized its manifest as complete, with 179,982,080 rows from 895DFE4DF2C37EC4 and 179,983,616 rows from 1A0D3F9F4FDF64D9. Complete means orderly recording finalization, not lossless acquisition. Full independent verification was still running when this investigation was written. Follow-up: C# verification reported zero sample errors across 359,965,696 rows, but the Python verifier timed out after 1,800 seconds and the harness failed; see [the follow-up](pc-freeze-investigation-20260913.md).
 
 ## Evidence
 
@@ -38,7 +38,11 @@ If delivery stops completely from an empty buffer, the main event's buffer capac
 - A Windows Modern Standby event at 07:22:44 occurred after the first loss and does not align with either gap. It is not evidence that standby caused these losses. Application logs in the inspected window contained no matching event.
 - Firmware requests `CYW43_NO_POWERSAVE_MODE`; simply suggesting that existing setting as a fix would not change this build.
 
-## Next discriminating experiment
+## Current interpretation — 2026-09-14
+
+The subsequent [instrumented repeat](stage5-diagnostic-repeat-analysis.md) confirmed queue overflow with zero timer drops and roughly 2.5-second ACK-progress stalls. The 1.6384-second ring remains the diagnostic baseline: overflow does not establish that its capacity is inherently inadequate for local Wi-Fi. Investigate why progress stalls, including firmware/lwIP behavior, receiver/TCP backpressure and the shared PC/AP/radio path. More buffering would change tolerance without identifying the cause. See [the updated diagnostic priorities](implementation-status.md).
+
+## Original next discriminating experiment
 
 Before another endurance run, include separate timer/queue drop counters, maximum ring occupancy, longest TCP-ACK delay and Wi-Fi link/RSSI diagnostics in recorded STATUS frames. Capture PC-side TCP timing/window/retransmission evidence and receiver scheduling/disk-flush timing during the run. These distinguish source timer stalls, radio delivery stalls, TCP backpressure and receiver pauses.
 

@@ -1,4 +1,8 @@
-# Latest result
+# Current status — 2026-09-14
+
+Both boards now stream counters. The two-hour battery run finalized with losses and a Python verification timeout; the instrumented repeat ended in a PC freeze after about 99 minutes. Stage 5 remains unqualified. See [current results and next steps](implementation-status.md). The records below describe earlier bring-up only.
+
+# Historical one-board result
 
 The first one-board lossless Wi-Fi smoke test passed on the replacement computer
 using computer-initiated TCP. See [the tested checkpoint](stage5-replacement-computer.md)

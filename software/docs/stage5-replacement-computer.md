@@ -2,6 +2,10 @@
 
 Date: 2026-09-12. Checkout: C:\dev\MultiNodeDAQ.
 
+## Current context — 2026-09-14
+
+This report preserves the successful September 12 one-board smoke test and its machine-specific setup. Both boards subsequently streamed concurrently and received newer diagnostic firmware. Two-board endurance remains unqualified; see [current status](implementation-status.md) and [diagnostic build/result](stage5-diagnostic-repeat.md). Installed-tool paths, private configuration and DHCP addresses below must be checked on the current computer.
+
 ## Result
 
 The one-Pico, 60-second counter-stream smoke test **passed** using a

@@ -1,7 +1,7 @@
 # Staged software implementation plan
 
 Date: 12 September 2026  
-Status: **Stages 0–3 completed and Stage 4 implemented on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stage 3 adds independently tested Python access/export, paper-based FAM SCF analysis and GUI-ready settings; Stage 4 provides the operator GUI; Stages 5-7 remain planned. See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
+Status: **Stages 0–3 completed and Stage 4 implemented on 12 September 2026**. Stage 1 includes the simulator/receiver and passing 30-minute two-node and sixteen-node qualification runs. Stage 2 passed its two-hour, sixteen-node recording gate and full independent scan; Stage 3 adds independently tested Python access/export, paper-based FAM SCF analysis and GUI-ready settings; Stage 4 provides the operator GUI; Stage 5 is in progress as of September 14: both Picos stream counters and smoke tests passed, but two-board endurance qualification remains unmet because of delivery stalls/source losses and an interrupted diagnostic run. Stages 6–7 remain pending. See [current results and next steps](software/docs/implementation-status.md). See [source and commands](software/README.md), [Stage 0 report](software/docs/stage0-test-report.md) and [Stage 1 report](software/docs/stage1-test-report.md).
 Design basis: [Base-station software plan](Base_Station_Software_Plan.md) and [detector architecture](Architecture_and_Design_Options.md).
 
 ## 1. Scope and decisions
@@ -56,7 +56,7 @@ Follow the [deployment and version-control plan](Deployment_and_Version_Control.
 | 2 (complete) | Durable recording, verification and replay reader | 1 | Laptop + local SSD |
 | 3 (complete) | Python client/worker and export | 2 | Laptop |
 | 4 (implemented) | Operator GUI and live diagnostics | 2; spectra require 3 | Laptop |
-| 5 | Two Pico synthetic-streaming prototype | Stable 0; end-to-end test uses 2-4 | Two Pico 2 W boards, AP, USB packs |
+| 5 (in progress; gate unmet) | Two Pico synthetic-streaming prototype | Stable 0; end-to-end test uses 2-4 | Two Pico 2 W boards, AP, USB packs |
 | 6 | Load/failure qualification and field package | 2-5 | Target laptop and boards |
 | 7 | ADC/timing/calibration integration | 6 plus hardware availability | Detector hardware |
 
@@ -138,6 +138,8 @@ C# computes essential continuity, clipping, mean/RMS, receive-rate and disk heal
 **Gate:** GUI pause/minimize/restart does not stop the recorder. Essential controls and waveform/status remain useful with Python absent. Target selected-unit display age below 500 ms on nominal local-network load, excluding intentional averaging; show actual age when exceeded. Verify clipping/gap/unsynchronized indicators and command failures. Changing filters affects display/derived outputs, never original recording. Closing the GUI explicitly offers recorder continuation or orderly shutdown.
 
 ## 9. Stage 5: two-board synthetic field prototype
+
+**Current status, September 14:** one-board and short instrumented two-board smoke tests passed. The two-hour battery run finalized with losses and incomplete independent verification; the diagnostic repeat ended in a PC freeze after about 99 minutes. Stage 5 is not complete. The 1.6384-second ring overflowed during roughly 2.5-second ACK-progress stalls; this establishes the loss mechanism, not that the buffer is inherently undersized. Retain its capacity for controlled stall diagnosis before selecting a mitigation. See [the evidence and remaining work](software/docs/implementation-status.md). The deliverables and acceptance gate below remain unchanged.
 
 **Deliverables**
 
