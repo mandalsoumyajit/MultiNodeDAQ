@@ -102,3 +102,8 @@ See the [operation guide](docs/stage3-operation.md), [paper-based FAM method](do
 See [operation](docs/stage4-operation.md), [plotting decision](docs/stage4-plotting.md), and [test report](docs/stage4-test-report.md). Build the full solution and run scripts/demo-stage4.ps1 for two synthetic units. scripts/package-stage4.ps1 creates the self-contained Windows x64 package; install-stage4.ps1 installs an immutable per-user version with rollback by selecting a previous release.
 
 The normal test script now includes the WPF/desktop tests. scripts/test-stage4-live.py additionally exercises actual GUI restart, Python staleness and sixteen-unit recording continuity.
+
+## Bench instrumentation and ADC bring-up
+
+See the [ADS127L11 firmware test strategy](docs/adc-firmware-test-plan.md), [EVM GUI startup investigation](docs/evm-gui-startup-debug.md), and [Analog Discovery 3 bench control guide](docs/ad3-bench-control.md) (`python/multinodedaq/ad3.py` and `scripts/ad3-control.py`).
+
