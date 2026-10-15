@@ -1,3 +1,4 @@
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from multinodedaq.ad3 import (
     AD3Device,
     AD3Error,
     J2PinMap,
+    analyze_analog_waveform,
     analyze_drdy,
     crc8_ads127l11,
     decode_spi_frames,
@@ -182,6 +184,21 @@ class TestAD3Analysis(unittest.TestCase):
         with self.assertRaises(AD3Error):
             AD3Device._validate_channel(2)
 
+    def test_analyze_analog_waveform(self) -> None:
+        rate = 200_000.0
+        freq = 1000.0
+        amp = 1.25
+        offset = 0.15
+        samples = [
+            offset + amp * math.sin(2.0 * math.pi * freq * (i / rate))
+            for i in range(4000)
+        ]
+        metrics = analyze_analog_waveform(samples, rate)
+        self.assertAlmostEqual(metrics["mean_dc_v"], offset, places=4)
+        self.assertAlmostEqual(metrics["estimated_sine_amplitude_v"], amp, places=3)
+        self.assertAlmostEqual(metrics["estimated_frequency_hz"], freq, places=2)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

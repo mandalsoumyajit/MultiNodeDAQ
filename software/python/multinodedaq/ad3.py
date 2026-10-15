@@ -1047,3 +1047,105 @@ class AD3Device:
 
         return list(buf[:collected]), actual_rate_hz, total_lost, total_corrupted
 
+    def capture_analog(
+        self,
+        channel: int = 0,
+        sample_rate_hz: float = 1_000_000.0,
+        num_samples: int = 8192,
+        range_v: float = 5.0,
+        settle_s: float = 0.05,
+        timeout_s: float = 5.0,
+    ) -> tuple[list[float], float]:
+        """Acquire a single-buffer oscilloscope capture on AnalogIn channel 0 (CH1) or 1 (CH2).
+
+        Returns (samples_volts, actual_sample_rate_hz).
+        """
+        hdwf = self._require_open()
+        if channel not in (0, 1):
+            raise AD3Error(f"AnalogIn channel must be 0 (CH1) or 1 (CH2), got {channel}")
+        if sample_rate_hz <= 0:
+            raise AD3Error(f"sample_rate_hz must be positive, got {sample_rate_hz}")
+        if num_samples <= 0:
+            raise AD3Error(f"num_samples must be positive, got {num_samples}")
+
+        max_buf = c_int()
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInBufferSizeInfo(hdwf, c_int(0), byref(max_buf)), "FDwfAnalogInBufferSizeInfo")
+        if max_buf.value > 0 and num_samples > max_buf.value:
+            raise AD3Error(f"Requested num_samples={num_samples} exceeds AnalogIn buffer size {max_buf.value}")
+
+        ch = c_int(channel)
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInReset(hdwf), "FDwfAnalogInReset")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInChannelEnableSet(hdwf, ch, c_int(1)), "FDwfAnalogInChannelEnableSet")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInChannelRangeSet(hdwf, ch, c_double(range_v)), "FDwfAnalogInChannelRangeSet")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInChannelOffsetSet(hdwf, ch, c_double(0.0)), "FDwfAnalogInChannelOffsetSet")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInAcquisitionModeSet(hdwf, c_int(ACQMODE_SINGLE)), "FDwfAnalogInAcquisitionModeSet")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInFrequencySet(hdwf, c_double(sample_rate_hz)), "FDwfAnalogInFrequencySet")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInBufferSizeSet(hdwf, c_int(num_samples)), "FDwfAnalogInBufferSizeSet")
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInTriggerSourceSet(hdwf, c_ubyte(TRIGSRC_NONE)), "FDwfAnalogInTriggerSourceSet")
+
+        # Configure channel offset/range and allow input frontend to settle before starting capture
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInConfigure(hdwf, c_int(1), c_int(0)), "FDwfAnalogInConfigure(reconfigure)")
+        actual_rate = c_double()
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInFrequencyGet(hdwf, byref(actual_rate)), "FDwfAnalogInFrequencyGet")
+        if settle_s > 0:
+            time.sleep(settle_s)
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInConfigure(hdwf, c_int(0), c_int(1)), "FDwfAnalogInConfigure(start)")
+
+        sts = c_ubyte()
+        deadline = time.monotonic() + timeout_s
+        while True:
+            _check_dwf(self.dwf, self.dwf.FDwfAnalogInStatus(hdwf, c_int(1), byref(sts)), "FDwfAnalogInStatus")
+            if sts.value == DWF_STATE_DONE:
+                break
+            if time.monotonic() > deadline:
+                self.dwf.FDwfAnalogInConfigure(hdwf, c_int(0), c_int(0))
+                raise TimeoutError(f"AnalogIn capture timed out after {timeout_s:.2f}s (status={sts.value})")
+            time.sleep(0.002)
+
+        buf = (c_double * num_samples)()
+        _check_dwf(self.dwf, self.dwf.FDwfAnalogInStatusData(hdwf, ch, buf, c_int(num_samples)), "FDwfAnalogInStatusData")
+        return list(buf), actual_rate.value
+
+
+def analyze_analog_waveform(samples: Sequence[float], sample_rate_hz: float) -> dict[str, Any]:
+    """Compute DC offset, RMS, peak-to-peak, and zero-crossing fundamental frequency for an analog capture."""
+    n = len(samples)
+    if n == 0 or sample_rate_hz <= 0:
+        raise AD3Error("analyze_analog_waveform requires non-empty samples and positive sample_rate_hz")
+
+    mean_v = sum(samples) / n
+    min_v = min(samples)
+    max_v = max(samples)
+    vpp = max_v - min_v
+    ac_rms_v = math.sqrt(sum((x - mean_v) ** 2 for x in samples) / n)
+    est_peak_v = ac_rms_v * math.sqrt(2.0)
+
+    # Interpolated rising zero-crossings around mean_v
+    crossings: list[float] = []
+    for i in range(n - 1):
+        y0 = samples[i] - mean_v
+        y1 = samples[i + 1] - mean_v
+        if y0 <= 0.0 < y1:
+            frac = -y0 / (y1 - y0) if (y1 - y0) != 0.0 else 0.0
+            crossings.append(i + frac)
+
+    if len(crossings) >= 2:
+        mean_period_samples = (crossings[-1] - crossings[0]) / (len(crossings) - 1)
+        freq_hz: float | None = sample_rate_hz / mean_period_samples if mean_period_samples > 0 else None
+    else:
+        freq_hz = None
+
+    return {
+        "num_samples": n,
+        "sample_rate_hz": sample_rate_hz,
+        "mean_dc_v": mean_v,
+        "min_v": min_v,
+        "max_v": max_v,
+        "vpp_v": vpp,
+        "ac_rms_v": ac_rms_v,
+        "estimated_sine_amplitude_v": est_peak_v,
+        "estimated_frequency_hz": freq_hz,
+        "rising_zero_crossings": len(crossings),
+    }
+
+

@@ -145,3 +145,12 @@ Run from `C:\dev\MultiNodeDAQ\software`:
 # Capture and decode 32-bit frames (24-bit data + 8-bit CRC) and save summary JSON
 .\.venv\Scripts\python.exe scripts\ad3-control.py logic --rate 25000000 --samples 32768 --trigger drdy --decode-spi --adc-crc --output .artifacts\ad3\j2-capture.json
 ```
+
+### 5.4 Analog loopback verification (`loopback`)
+
+With `W1` wired to oscilloscope input `CH1` (`1+`, with `1-` grounded), `loopback` drives a sine wave on `W1`, captures `CH1` via [`AD3Device.capture_analog`](../python/multinodedaq/ad3.py#L1050-L1107), and computes DC offset, $V_{\text{pp}}$, AC RMS, peak amplitude, and zero-crossing frequency via [`analyze_analog_waveform`](../python/multinodedaq/ad3.py#L1110-L1150):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ad3-control.py loopback --freq 1000 --amplitude 1.0 --offset 0.0 --rate 200000 --samples 8192
+```
+

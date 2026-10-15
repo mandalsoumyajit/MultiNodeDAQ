@@ -17,6 +17,7 @@ from multinodedaq.ad3 import (
     AD3Device,
     AD3Error,
     J2PinMap,
+    analyze_analog_waveform,
     analyze_drdy,
     decode_spi_frames,
     enumerate_devices,
@@ -291,7 +292,69 @@ def build_parser() -> argparse.ArgumentParser:
     p_la.add_argument("--on-close", default="run", choices=["run", "stop", "shutdown"])
     p_la.add_argument("--output", help="Optional JSON file path to save capture summary")
 
+    p_lb = sub.add_parser("loopback", help="Drive sine wave on W1/W2 and measure on oscilloscope CH1/CH2")
+    p_lb.add_argument("--wavegen-channel", type=int, default=0, choices=[0, 1], help="Wavegen channel: 0=W1, 1=W2")
+    p_lb.add_argument("--scope-channel", type=int, default=0, choices=[0, 1], help="Scope channel: 0=CH1, 1=CH2")
+    p_lb.add_argument("--freq", type=float, default=1000.0, help="Sine frequency in Hz (default 1000)")
+    p_lb.add_argument("--amplitude", type=float, default=1.0, help="Peak amplitude in V (default 1.0)")
+    p_lb.add_argument("--offset", type=float, default=0.0, help="DC offset in V (default 0.0)")
+    p_lb.add_argument("--rate", type=float, default=200_000.0, help="Scope sample rate in Hz (default 200 kHz)")
+    p_lb.add_argument("--samples", type=int, default=8192, help="Scope sample count (default 8192)")
+    p_lb.add_argument("--range", type=float, default=5.0, help="Scope vertical range in V (default 5.0)")
+    p_lb.add_argument("--on-close", default="stop", choices=["run", "stop", "shutdown"])
+
     return parser
+
+
+def cmd_loopback(args: argparse.Namespace) -> int:
+    with AD3Device(
+        device_index=args.device_index,
+        serial=args.serial,
+        config_index=args.config_index,
+        on_close=args.on_close,
+    ) as ad3:
+        wg = ad3.configure_sine(
+            channel=args.wavegen_channel,
+            frequency_hz=args.freq,
+            amplitude_v=args.amplitude,
+            offset_v=args.offset,
+        )
+        time.sleep(0.05)
+        samples, actual_rate = ad3.capture_analog(
+            channel=args.scope_channel,
+            sample_rate_hz=args.rate,
+            num_samples=args.samples,
+            range_v=args.range,
+        )
+        if args.on_close != "run":
+            ad3.stop_wavegen(channel=args.wavegen_channel)
+
+        metrics = analyze_analog_waveform(samples, actual_rate)
+        freq_err_pct = (
+            abs((metrics["estimated_frequency_hz"] - args.freq) / args.freq) * 100.0
+            if metrics["estimated_frequency_hz"] is not None
+            else None
+        )
+        amp_err_pct = (
+            abs((metrics["estimated_sine_amplitude_v"] - args.amplitude) / args.amplitude) * 100.0
+            if args.amplitude > 0
+            else None
+        )
+        result = {
+            "device": {
+                "name": ad3.device_info.name if ad3.device_info else None,
+                "serial": ad3.device_info.serial if ad3.device_info else None,
+            },
+            "stimulus": wg,
+            "measurement": metrics,
+            "accuracy": {
+                "frequency_error_pct": freq_err_pct,
+                "amplitude_error_pct": amp_err_pct,
+                "dc_offset_error_v": metrics["mean_dc_v"] - args.offset,
+            },
+        }
+        print(json.dumps(result, indent=2))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -306,6 +369,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_wavegen(args)
         if args.subcommand == "logic":
             return cmd_logic(args)
+        if args.subcommand == "loopback":
+            return cmd_loopback(args)
         raise AD3Error(f"Unknown subcommand: {args.subcommand}")
     except (AD3Error, TimeoutError) as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
@@ -314,3 +379,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
